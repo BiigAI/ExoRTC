@@ -60,15 +60,13 @@ export function createServer(name: string, ownerId: string): Server {
 
 export function getServersByUserId(userId: string): Server[] {
     return db.all<Server>(`
-        SELECT s.* FROM servers s
+        SELECT s.*, 
+        (SELECT expires_at FROM server_kicks sk 
+         WHERE sk.server_id = s.id AND sk.user_id = ? AND sk.expires_at > datetime('now') 
+         ORDER BY sk.expires_at DESC LIMIT 1) as kick_expires_at
+        FROM servers s
         INNER JOIN server_members sm ON s.id = sm.server_id
         WHERE sm.user_id = ?
-        AND NOT EXISTS (
-            SELECT 1 FROM server_kicks sk 
-            WHERE sk.server_id = s.id 
-            AND sk.user_id = ? 
-            AND sk.expires_at > datetime('now')
-        )
     `, [userId, userId]);
 }
 

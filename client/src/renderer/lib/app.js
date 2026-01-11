@@ -1291,23 +1291,44 @@ function leaveCurrentRoom() {
 
 function updateServerListUI() {
     const serverList = document.getElementById('server-list');
-    serverList.innerHTML = servers.map(s => `
-        <div class="server-item ${currentServer?.id === s.id ? 'active' : ''}" data-server-id="${s.id}">
+    serverList.innerHTML = servers.map(s => {
+        let statusHtml = '';
+        let isKicked = false;
+
+        if (s.kick_expires_at) {
+            const expires = new Date(s.kick_expires_at);
+            if (expires > new Date()) {
+                isKicked = true;
+                const remainingMinutes = Math.ceil((expires - new Date()) / 60000);
+                statusHtml = `<div style="font-size: 10px; color: var(--danger);">Kicked: ${remainingMinutes}m left</div>`;
+            }
+        }
+
+        return `
+        <div class="server-item ${currentServer?.id === s.id ? 'active' : ''} ${isKicked ? 'kicked' : ''}" 
+             data-server-id="${s.id}" 
+             data-kicked="${isKicked}"
+             style="${isKicked ? 'opacity: 0.7; cursor: not-allowed;' : ''}">
             <div style="flex: 1; min-width: 0;">
-                <div class="server-item-name">${s.name}</div>
-                <div class="server-item-code">Code: ${s.invite_code}</div>
+                <div class="server-item-name" style="${isKicked ? 'color: var(--danger);' : ''}">${s.name}</div>
+                ${isKicked ? statusHtml : `<div class="server-item-code">Code: ${s.invite_code}</div>`}
             </div>
+            ${!isKicked ? `
             <button class="copy-code-btn" data-code="${s.invite_code}" title="Copy invite code" onclick="event.stopPropagation(); copyServerCode('${s.invite_code}')">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
-            </button>
+            </button>` : ''}
         </div>
-    `).join('');
+    `}).join('');
 
     serverList.querySelectorAll('.server-item').forEach(el => {
         el.addEventListener('click', () => {
+            if (el.dataset.kicked === 'true') {
+                // Optional: Show a toast or shake animation
+                return;
+            }
             const server = servers.find(s => s.id === el.dataset.serverId);
             if (server) selectServer(server);
         });

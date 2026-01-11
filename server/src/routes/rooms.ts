@@ -73,7 +73,7 @@ router.get('/rooms/:id', (req: AuthenticatedRequest, res: Response) => {
     res.json({ room });
 });
 
-// DELETE /api/rooms/:id - Delete a room (admin only)
+// DELETE /api/rooms/:id - Delete a room (pmc_member, admin, owner)
 router.delete('/rooms/:id', (req: AuthenticatedRequest, res: Response) => {
     const room = getRoomById(req.params.id);
 
@@ -82,9 +82,16 @@ router.delete('/rooms/:id', (req: AuthenticatedRequest, res: Response) => {
         return;
     }
 
-    if (!isServerAdmin(req.user!.id, room.server_id)) {
-        res.status(403).json({ error: 'Admin permission required' });
+    const userRole = getUserRole(req.user!.id, room.server_id);
+    if (!canCreateChannels(userRole)) {
+        res.status(403).json({ error: 'Permission denied: cannot delete channels' });
         return;
+    }
+
+    // Broadcast room deletion to kick users before deleting
+    if (ioInstance) {
+        ioInstance.to(`room:${req.params.id}`).emit('room-deleted', { roomId: req.params.id });
+        ioInstance.to(`server:${room.server_id}`).emit('rooms-updated');
     }
 
     const success = deleteRoom(req.params.id);

@@ -683,6 +683,17 @@ function setupSocketHandlers() {
             await loadRooms(currentServer.id);
         }
     });
+
+    // Handle room deletion - kick user if in deleted room
+    socketManager.on('room-deleted', (data) => {
+        if (currentRoom && currentRoom.id === data.roomId) {
+            currentRoom = null;
+            roomMembers = [];
+            audioEngine.closeAllConnections();
+            showNoRoomView();
+            playSound('leave.ogg');
+        }
+    });
 }
 
 function setupHotkeyHandlers() {
@@ -941,8 +952,65 @@ function updateRoomListUI() {
         el.addEventListener('mouseleave', () => {
             tooltip.classList.add('hidden');
         });
+
+        // Right-click for context menu (only if user can create/delete channels)
+        if (canCreateChannels(currentUserRole)) {
+            el.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showRoomContextMenu(e.clientX, e.clientY, roomId);
+            });
+        }
     });
 }
+
+// Context menu state
+let contextMenuRoomId = null;
+
+function showRoomContextMenu(x, y, roomId) {
+    const menu = document.getElementById('room-context-menu');
+    contextMenuRoomId = roomId;
+
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.classList.remove('hidden');
+}
+
+function hideRoomContextMenu() {
+    const menu = document.getElementById('room-context-menu');
+    menu.classList.add('hidden');
+    contextMenuRoomId = null;
+}
+
+async function deleteSelectedRoom() {
+    if (!contextMenuRoomId || !currentServer) {
+        hideRoomContextMenu();
+        return;
+    }
+
+    const room = rooms.find(r => r.id === contextMenuRoomId);
+    if (!room) {
+        hideRoomContextMenu();
+        return;
+    }
+
+    if (!confirm(`Delete channel "${room.name}"? Users in this channel will be disconnected.`)) {
+        hideRoomContextMenu();
+        return;
+    }
+
+    const result = await api.request('DELETE', `/rooms/${contextMenuRoomId}`);
+    hideRoomContextMenu();
+
+    if (result.error) {
+        console.error('Failed to delete room:', result.error);
+    }
+}
+
+// Make deleteSelectedRoom available globally for onclick
+window.deleteSelectedRoom = deleteSelectedRoom;
+
+// Hide context menu on click elsewhere
+document.addEventListener('click', hideRoomContextMenu);
 
 function updateRoomMembersUI() {
     const roomMembersEl = document.getElementById('room-members');

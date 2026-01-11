@@ -216,6 +216,11 @@ export function initializeSignaling(io: SocketServer): void {
             });
         });
 
+        // Ping/Pong for latency measurement
+        socket.on('ping', (timestamp: number) => {
+            socket.emit('pong', timestamp);
+        });
+
         // Handle disconnect
         socket.on('disconnect', () => {
             console.log(`User disconnected: ${socket.username}`);

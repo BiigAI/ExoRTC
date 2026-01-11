@@ -184,6 +184,9 @@ const api = {
 const socketManager = {
     socket: null,
     eventHandlers: new Map(),
+    currentPing: null,
+    pingHistory: [],
+    maxPingHistory: 5,
 
     async connect(token) {
         return new Promise((resolve) => {
@@ -207,7 +210,58 @@ const socketManager = {
                 console.error('Socket connection error:', error.message);
                 resolve(false);
             });
+
+            // Handle pong responses for ping measurement
+            this.socket.on('pong', (timestamp) => {
+                const latency = Date.now() - timestamp;
+                this.currentPing = latency;
+
+                // Keep last N pings for averaging
+                this.pingHistory.push(latency);
+                if (this.pingHistory.length > this.maxPingHistory) {
+                    this.pingHistory.shift();
+                }
+
+                // Update UI
+                this.updatePingDisplay();
+            });
         });
+    },
+
+    sendPing() {
+        if (this.socket && this.socket.connected) {
+            this.socket.emit('ping', Date.now());
+        }
+    },
+
+    getAveragePing() {
+        if (this.pingHistory.length === 0) return null;
+        const sum = this.pingHistory.reduce((a, b) => a + b, 0);
+        return Math.round(sum / this.pingHistory.length);
+    },
+
+    updatePingDisplay() {
+        const pingDisplay = document.getElementById('ping-display');
+        if (pingDisplay) {
+            const avgPing = this.getAveragePing();
+            if (avgPing !== null) {
+                pingDisplay.textContent = `Ping: ${avgPing}ms`;
+
+                // Color code based on ping
+                if (avgPing < 50) {
+                    pingDisplay.style.color = 'var(--success)';
+                } else if (avgPing < 100) {
+                    pingDisplay.style.color = 'var(--text)';
+                } else if (avgPing < 200) {
+                    pingDisplay.style.color = '#f59e0b'; // warning yellow
+                } else {
+                    pingDisplay.style.color = 'var(--danger)';
+                }
+            } else {
+                pingDisplay.textContent = 'Ping: --ms';
+                pingDisplay.style.color = 'var(--text-muted)';
+            }
+        }
     },
 
     disconnect() {
@@ -519,6 +573,12 @@ async function connectAndShowApp() {
     document.getElementById('app-page').classList.remove('hidden');
     document.getElementById('app-page').style.display = 'flex';
     document.getElementById('status-bar').classList.remove('hidden');
+
+    // Start ping measurement
+    socketManager.sendPing(); // Initial ping
+    setInterval(() => {
+        socketManager.sendPing();
+    }, 2000); // Ping every 2 seconds
 }
 
 function setupSocketHandlers() {

@@ -75,9 +75,9 @@ export function joinServer(userId: string, inviteCode: string): { server: Server
     return { server };
 }
 
-export function getServerMembers(serverId: string): { user_id: string; username: string; role: string }[] {
-    return db.all<{ user_id: string; username: string; role: string }>(`
-        SELECT u.id as user_id, u.username, sm.role
+export function getServerMembers(serverId: string): any[] {
+    return db.all(`
+        SELECT sm.user_id, sm.server_id, sm.role, sm.joined_at, u.username, u.email, u.profile_color
         FROM server_members sm
         INNER JOIN users u ON sm.user_id = u.id
         WHERE sm.server_id = ?

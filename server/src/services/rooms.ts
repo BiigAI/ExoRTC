@@ -13,6 +13,7 @@ export interface RoomMember {
     user_id: string;
     room_id: string;
     username: string;
+    profile_color?: string;
     joined_at: string;
 }
 
@@ -62,7 +63,7 @@ export function leaveRoom(userId: string): boolean {
 
 export function getRoomMembers(roomId: string): RoomMember[] {
     return db.all<RoomMember>(`
-        SELECT rm.user_id, rm.room_id, u.username, rm.joined_at
+        SELECT rm.user_id, rm.room_id, u.username, u.profile_color, rm.joined_at
         FROM room_members rm
         INNER JOIN users u ON rm.user_id = u.id
         WHERE rm.room_id = ?

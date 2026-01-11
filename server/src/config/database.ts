@@ -38,7 +38,19 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
             console.log('Migrated: Added voice_mode column to rooms');
         }
     } catch (e) {
-        console.warn('Migration check failed:', e);
+        console.warn('Migration check failed for rooms:', e);
+    }
+
+    // Migration: Add profile_color column to users if it doesn't exist
+    try {
+        const columns = all<{ name: string }>(`PRAGMA table_info(users)`);
+        const hasProfileColor = columns.some(c => c.name === 'profile_color');
+        if (!hasProfileColor) {
+            db.run(`ALTER TABLE users ADD COLUMN profile_color TEXT DEFAULT '#CC2244'`);
+            console.log('Migrated: Added profile_color column to users');
+        }
+    } catch (e) {
+        console.warn('Migration check failed for users:', e);
     }
 
     // Save database

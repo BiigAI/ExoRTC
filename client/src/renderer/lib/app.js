@@ -99,6 +99,10 @@ const api = {
         return this.request('GET', '/auth/me');
     },
 
+    async updateProfileColor(color) {
+        return this.request('PUT', '/auth/profile/color', { color });
+    },
+
     // Servers
     async getServers() {
         return this.request('GET', '/servers');
@@ -473,9 +477,7 @@ async function connectAndShowApp() {
     setupHotkeyHandlers();
     await loadServers();
 
-    document.getElementById('user-name').textContent = currentUser.username;
-    document.getElementById('user-avatar').textContent = currentUser.username[0].toUpperCase();
-
+    updateUserDisplay();
     document.getElementById('auth-page').classList.add('hidden');
     document.getElementById('app-page').classList.remove('hidden');
     document.getElementById('app-page').style.display = 'flex';
@@ -664,7 +666,7 @@ async function selectServer(server) {
     }
 
     await loadRooms(server.id);
-    document.getElementById('room-section').style.display = 'block';
+    // document.getElementById('room-section').style.display = 'block'; // Always visible now
     updateServerListUI();
 }
 
@@ -755,11 +757,10 @@ function updateServerListUI() {
 function updateRoomListUI() {
     const roomList = document.getElementById('room-list');
     roomList.innerHTML = rooms.map(r => {
-        const icon = r.voice_mode === 'open' ? '🎤' : '🔊';
         const modeLabel = r.voice_mode === 'open' ? 'Open Mic' : 'PTT';
         return `
             <div class="room-item ${currentRoom?.id === r.id ? 'active' : ''}" data-room-id="${r.id}" title="${modeLabel}">
-                <div class="room-item-icon">${icon}</div>
+                <div class="room-item-icon"></div>
                 <span>${r.name}</span>
                 <span class="room-item-count">${r.member_count || 0}</span>
             </div>
@@ -780,7 +781,7 @@ function updateRoomMembersUI() {
 
     roomMembersEl.innerHTML = allMembers.map(m => `
         <div class="member-card" data-user-id="${m.user_id}">
-            <div class="member-avatar">${m.username[0].toUpperCase()}</div>
+            <div class="member-avatar" style="background: ${m.user_id === currentUser.id ? (currentUser.profile_color || 'var(--accent)') : (m.profile_color || 'var(--accent)')}">${m.username[0].toUpperCase()}</div>
             <div class="member-name">${m.username}${m.user_id === currentUser.id ? ' (You)' : ''}</div>
             <div class="member-status">In channel</div>
         </div>
@@ -851,6 +852,9 @@ function openSettings() {
     aiValue.textContent = (settings.aiAggressiveness || 50) + '%';
     aiContainer.style.display = settings.aiNoiseCancel ? 'block' : 'none';
 
+    // Profile Color
+    document.getElementById('profile-color-input').value = currentUser.profile_color || '#CC2244';
+
     // Dynamic UI updates
     aiCheck.onchange = (e) => {
         aiContainer.style.display = e.target.checked ? 'block' : 'none';
@@ -919,10 +923,31 @@ function saveSettings() {
         audioEngine.rnnoiseNode.port.postMessage({ type: 'setAggressiveness', value: settings.aiAggressiveness });
     }
 
+    // Save profile color
+    const newColor = document.getElementById('profile-color-input').value;
+    if (newColor !== currentUser.profile_color) {
+        api.updateProfileColor(newColor).then(result => {
+            if (!result.error) {
+                currentUser.profile_color = result.data.user.profile_color;
+                updateUserDisplay();
+            }
+        });
+    }
+
     closeModal('settings-modal');
 
     // Update button displays
     updateKeybindDisplay();
+}
+
+function updateUserDisplay() {
+    const userNameElement = document.getElementById('user-name');
+    const userAvatarElement = document.getElementById('user-avatar');
+    if (userNameElement && userAvatarElement && currentUser) {
+        userNameElement.textContent = currentUser.username;
+        userAvatarElement.textContent = currentUser.username[0].toUpperCase();
+        userAvatarElement.style.background = currentUser.profile_color || 'var(--accent)';
+    }
 }
 
 function updateKeybindDisplay() {
@@ -953,18 +978,21 @@ async function showMembers() {
     membersList.innerHTML = serverMembers.map(m => {
         const hasShout = shoutUsers.some(s => s.user_id === m.user_id);
         return `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--border);">
+            <div class="setting-row" style="cursor: default; padding: 10px 16px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 600;">${m.username[0].toUpperCase()}</div>
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: ${m.profile_color || 'var(--accent)'}; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">${m.username[0].toUpperCase()}</div>
                     <div>
-                        <div style="font-weight: 500;">${m.username}</div>
-                        <div style="font-size: 12px; color: var(--text-muted);">${m.role}${hasShout ? ' • 📢 Shout' : ''}</div>
+                        <div style="font-weight: 600; font-size: 14px;">${m.username}</div>
+                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 500;">
+                            ${m.role.toUpperCase()}
+                            ${hasShout ? '<span style="color: var(--warning); margin-left: 6px;">SHOUT ENABLED</span>' : ''}
+                        </div>
                     </div>
                 </div>
                 <button class="btn ${hasShout ? 'btn-secondary' : 'btn-primary'}" 
-                    style="font-size: 12px; padding: 6px 12px;"
+                    style="font-size: 11px; padding: 6px 12px; width: auto;"
                     onclick="toggleShout('${m.user_id}', ${hasShout})">
-                    ${hasShout ? 'Revoke Shout' : 'Grant Shout'}
+                    ${hasShout ? 'Revoke' : 'Permit'}
                 </button>
             </div>
         `;
@@ -1139,3 +1167,71 @@ updateKeybindDisplay();
 
 // Start app
 init();
+// Helper for range slider backgrounds
+function updateRangeBackground(input) {
+    const value = (input.value - input.min) / (input.max - input.min) * 100;
+    input.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${value}%, #333 ${value}%, #333 100%)`;
+}
+
+// Logic for settings modal interactions
+function toggleAiCardStyle() {
+    const check = document.getElementById('ai-noise-cancel-check');
+    const card = document.getElementById('ai-feature-card');
+    const container = document.getElementById('ai-aggressiveness-container');
+
+    if (check.checked) {
+        card.classList.add('active');
+        container.style.display = 'block';
+    } else {
+        card.classList.remove('active');
+        container.style.display = 'none';
+    }
+}
+
+// Update listeners when modal opens (or globally)
+document.addEventListener('DOMContentLoaded', () => {
+    const sliders = document.querySelectorAll('.custom-range');
+    sliders.forEach(slider => {
+        slider.addEventListener('input', () => updateRangeBackground(slider));
+    });
+
+    const aiCheck = document.getElementById('ai-noise-cancel-check');
+    if (aiCheck) {
+        aiCheck.addEventListener('change', toggleAiCardStyle);
+    }
+
+    // Mobile Menu Toggle
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.getElementById('main-sidebar');
+
+    if (mobileMenuBtn && sidebar) {
+        mobileMenuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            // Create or toggle overlay
+            let overlay = document.getElementById('sidebar-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'sidebar-overlay';
+                overlay.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.5); z-index: 90;
+                    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+                `;
+                document.body.appendChild(overlay);
+                overlay.addEventListener('click', () => {
+                    sidebar.classList.remove('open');
+                    overlay.style.opacity = '0';
+                    overlay.style.pointerEvents = 'none';
+                });
+            }
+
+            if (sidebar.classList.contains('open')) {
+                overlay.style.opacity = '1';
+                overlay.style.pointerEvents = 'auto';
+            } else {
+                overlay.style.opacity = '0';
+                overlay.style.pointerEvents = 'none';
+            }
+        });
+    }
+});

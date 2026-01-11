@@ -10,13 +10,14 @@
     -->
     <title>ExoRTC</title>
     <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/responsive.css">
 </head>
 
 <body>
     <!-- Auth Page -->
     <div id="auth-page" class="auth-container">
         <div class="auth-box">
-            <h1>🎙️ ExoRTC</h1>
+            <h1>ExoRTC</h1>
             <p>P2P Voice Communication</p>
 
             <div id="error-message" class="error-message"></div>
@@ -59,116 +60,160 @@
             </div>
 
             <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center;">
-                <a href="#" id="change-server-btn" style="color: var(--text-muted); font-size: 12px;">⚙️ Server: <span
+                <a href="#" id="change-server-btn" style="color: var(--text-muted); font-size: 12px;">Server: <span
                         id="current-server-display">localhost</span></a>
             </div>
         </div>
     </div>
 
     <!-- Main App (hidden by default) -->
-    <div id="app-page" class="hidden" style="display: flex; width: 100%; height: 100%;">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <h2>ExoRTC</h2>
-            </div>
-
-            <!-- Servers -->
-            <div class="server-list" id="server-list">
-                <!-- Servers will be populated here -->
-            </div>
-
-            <!-- Actions -->
-            <div style="padding: 8px; border-top: 1px solid var(--border);">
-                <button class="btn btn-secondary" id="create-server-btn" style="font-size: 12px;">+ Create
-                    Server</button>
-                <button class="btn btn-secondary" id="join-server-btn" style="font-size: 12px; margin-top: 4px;">🔗 Join
-                    Server</button>
-            </div>
-
-            <!-- Rooms -->
-            <div class="room-list" id="room-section" style="display: none;">
-                <div style="display: flex; align-items: center; justify-content: space-between; padding-right: 8px;">
-                    <h3>Voice Channels</h3>
-                    <button id="create-room-btn"
-                        style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"
-                        title="Create Room">+</button>
-                </div>
-                <div id="room-list">
-                    <!-- Rooms will be populated here -->
-                </div>
-                <button id="manage-members-btn" class="btn btn-secondary"
-                    style="font-size: 12px; margin-top: 8px; width: 100%;">👥 Manage Members</button>
-            </div>
-
-            <!-- User info -->
-            <div
-                style="padding: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px;">
-                <div id="user-avatar"
-                    style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 600;">
-                </div>
-                <div style="flex: 1;">
-                    <div id="user-name" style="font-size: 13px; font-weight: 500;"></div>
-                    <div style="font-size: 11px; color: var(--text-muted);">Online</div>
-                </div>
-                <button id="settings-btn"
-                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"
-                    title="Settings">⚙️</button>
-                <button id="logout-btn"
-                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"
-                    title="Logout">🚪</button>
-            </div>
+    <div id="app-page" class="hidden app-shell">
+        <!-- Mobile Header (Visible < 768px) -->
+        <div class="mobile-header"
+            style="display: none; padding: 16px; border-bottom: 1px solid var(--border); align-items: center; justify-content: space-between;">
+            <div class="brand-header" style="padding: 0; font-size: 18px;">Exo<span>RTC</span></div>
+            <button id="mobile-menu-btn" style="background: none; border: none; color: white; cursor: pointer;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- No room selected state -->
-            <div id="no-room-view"
-                style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted);">
-                <div style="font-size: 48px; margin-bottom: 16px;">🎙️</div>
-                <div style="font-size: 18px;">Select a voice channel to join</div>
+        <!-- Sidebar Column -->
+        <div class="sidebar" id="main-sidebar">
+            <div class="brand-header mobile-hidden">Exo<span>RTC</span></div>
+            <!-- Navigation Area (Top) -->
+            <div class="sidebar-nav">
+                <!-- Rooms -->
+                <div id="room-section"
+                    style="flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 0 16px;">
+                    <div
+                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                        <span class="dock-section-title" style="margin: 0;">Voice Channels</span>
+                        <button id="create-room-btn"
+                            style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: 0.2s;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+                            onmouseout="this.style.background='none'">+</button>
+                    </div>
+                    <div id="room-list" class="room-list-container" style="flex: 1; overflow-y: auto;">
+                        <!-- Rooms populated here -->
+                    </div>
+
+                    <button id="manage-members-btn" class="btn btn-secondary"
+                        style="font-size: 11px; margin-top: 12px; margin-bottom: 12px; width: 100%; border: 1px solid var(--border); background: transparent;">Manage
+                        Members</button>
+                </div>
             </div>
 
-            <!-- Room view (hidden by default) -->
-            <div id="room-view" class="hidden" style="display: flex; flex-direction: column; flex: 1;">
-                <div class="room-header">
-                    <div class="room-title" id="current-room-name">General</div>
-                    <button id="leave-room-btn"
-                        style="background: var(--danger); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Leave</button>
+            <!-- System Dock (Bottom) -->
+            <div class="sidebar-dock">
+                <!-- Servers -->
+                <div id="server-section">
+                    <div class="dock-section-title">Servers</div>
+                    <div id="server-list"
+                        style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+                        <!-- Servers populated here -->
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-secondary" id="create-server-btn"
+                            style="flex: 1; font-size: 11px; padding: 8px;">Create</button>
+                        <button class="btn btn-secondary" id="join-server-btn"
+                            style="flex: 1; font-size: 11px; padding: 8px;">Join</button>
+                    </div>
                 </div>
 
-                <div class="room-members" id="room-members">
-                    <!-- Members will be populated here -->
-                </div>
-
-                <div class="controls-bar">
-                    <button class="ptt-button ptt" id="ptt-btn">
-                        <span>🎤</span>
-                        <span>Push to Talk</span>
-                        <kbd id="ptt-key">V</kbd>
-                    </button>
-                    <button class="ptt-button shout" id="shout-btn">
-                        <span>📢</span>
-                        <span>Shout</span>
-                        <kbd id="shout-key">B</kbd>
-                    </button>
-                    <div class="device-info">
-                        <span>🎤 <span id="input-device">Default</span></span>
-                        <span>🔊 <span id="output-device">Speakers</span></span>
+                <!-- User Deck -->
+                <div class="user-deck">
+                    <div id="user-avatar"
+                        style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div id="user-name"
+                            style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        </div>
+                        <div
+                            style="font-size: 11px; color: var(--success); display: flex; align-items: center; gap: 4px;">
+                            <div style="width: 6px; height: 6px; background: var(--success); border-radius: 50%;"></div>
+                            Online
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button id="settings-btn" title="Settings"
+                            style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 4px;"><svg
+                                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                                </path>
+                            </svg></button>
+                        <button id="logout-btn" title="Logout"
+                            style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 4px;"><svg
+                                width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg></button>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Status bar -->
-    <div id="status-bar" class="status-bar hidden" style="position: fixed; bottom: 0; left: 0; right: 0;">
-        <div class="status-indicator">
-            <div class="status-dot" id="connection-status"></div>
-            <span id="connection-text">Connected</span>
+        <!-- Stage Area (Main Content) -->
+        <div class="stage-container">
+            <!-- No Room View -->
+            <div id="no-room-view"
+                style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.5;">
+                <div style="font-size: 64px; margin-bottom: 24px;"></div>
+                <div style="font-size: 16px; font-weight: 500;">Select a voice channel to get started</div>
+            </div>
+
+            <!-- Room View -->
+            <div id="room-view" class="stage-body hidden">
+                <div class="stage-header">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 24px; color: var(--text-muted);">#</span>
+                        <div class="stage-title" id="current-room-name">General</div>
+                    </div>
+                    <button id="leave-room-btn" class="btn"
+                        style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger); width: auto; padding: 8px 20px;">Disconnect</button>
+                </div>
+
+                <div class="room-members" id="room-members">
+                    <!-- Members -->
+                </div>
+
+                <div class="controls-bar">
+                    <button class="ptt-button ptt" id="ptt-btn">
+                        <span>Push to Talk</span>
+                        <kbd id="ptt-key">V</kbd>
+                    </button>
+                    <button class="ptt-button shout" id="shout-btn">
+                        <span>Shout</span>
+                        <kbd id="shout-key">B</kbd>
+                    </button>
+                    <div class="device-info">
+                        <span><span id="input-device">Default</span></span>
+                        <span><span id="output-device">Speakers</span></span>
+                    </div>
+                </div>
+            </div>
         </div>
-        <span style="color: var(--text-muted);">|</span>
-        <span id="ping-display">Ping: --ms</span>
+
+        <!-- Status bar -->
+        <div id="status-bar" class="status-bar hidden" style="position: absolute; bottom: 0; left: 0; right: 0;">
+            <div class="status-indicator">
+                <div class="status-dot" id="connection-status"></div>
+                <span id="connection-text">Connected</span>
+            </div>
+            <span style="color: var(--text-muted);">|</span>
+            <span id="ping-display">Ping: --ms</span>
+        </div>
+    </div>
     </div>
 
     <!-- Modals -->
@@ -214,7 +259,7 @@
                 <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
                     <input type="checkbox" id="room-open-mic" style="width: auto;">
                     <label for="room-open-mic" style="margin: 0; cursor: pointer;">
-                        🎤 Open Mic (Voice Activated)
+                        Open Mic (Voice Activated)
                     </label>
                 </div>
                 <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
@@ -247,103 +292,137 @@
 
     <div id="members-modal" class="modal-overlay">
         <div class="modal" style="max-width: 500px;">
-            <h2>Server Members</h2>
-            <div id="members-list" style="max-height: 400px; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="margin: 0;">Server Members</h2>
+                <button onclick="closeModal('members-modal')"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px;">×</button>
+            </div>
+
+            <div id="members-list"
+                style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
                 <!-- Members will be populated here -->
             </div>
-            <button type="button" class="btn btn-secondary" style="margin-top: 16px;"
-                onclick="closeModal('members-modal')">Close</button>
+
+            <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" style="width: auto; padding: 10px 24px;"
+                    onclick="closeModal('members-modal')">Close</button>
+            </div>
         </div>
     </div>
 
     <div id="settings-modal" class="modal-overlay">
-        <div class="modal" style="max-width: 450px;">
-            <h2>⚙️ Settings</h2>
-
-            <div style="margin-bottom: 24px;">
-                <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">🎮 Keybinds</h3>
-
-                <div class="form-group">
-                    <label>Push to Talk</label>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="ptt-key-input" readonly placeholder="Press a key..."
-                            style="flex: 1; cursor: pointer; text-align: center;">
-                        <button type="button" class="btn btn-secondary" style="width: auto; padding: 8px 12px;"
-                            onclick="startKeyCapture('ptt')">Set</button>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Shout (Broadcast)</label>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="shout-key-input" readonly placeholder="Press a key..."
-                            style="flex: 1; cursor: pointer; text-align: center;">
-                        <button type="button" class="btn btn-secondary" style="width: auto; padding: 8px 12px;"
-                            onclick="startKeyCapture('shout')">Set</button>
-                    </div>
-                </div>
+        <div class="modal" style="max-width: 700px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="margin: 0;">Settings</h2>
+                <button onclick="closeModal('settings-modal')"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px;">×</button>
             </div>
 
-            <div style="margin-bottom: 24px;">
-                <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">🎤 Voice Settings</h3>
-
-                <div class="form-group"
-                    style="padding: 12px; background: rgba(124, 58, 237, 0.1); border: 1px solid rgba(124, 58, 237, 0.2); border-radius: 6px; margin-bottom: 20px;">
-                    <label style="display: flex; gap: 10px; cursor: pointer; align-items: flex-start;">
-                        <input type="checkbox" id="ai-noise-cancel-check" checked style="margin-top: 4px;">
-                        <div style="flex: 1;">
-                            <div
-                                style="font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; color: var(--text-primary);">
-                                ⚡ AI Noise Cancellation</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
-                                Advanced noise suppression using RNNoise. Filters out keyboard clicks, breathing, and
-                                background hum.
+            <div class="settings-content">
+                <!-- Keybinds Section -->
+                <div class="settings-section">
+                    <div class="settings-section-header">Controls</div>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <span class="setting-label">Push to Talk</span>
+                            <div class="setting-control">
+                                <div id="ptt-key-input" class="keybind-display">V</div>
+                                <button class="btn btn-secondary"
+                                    style="margin: 0; padding: 6px 12px; font-size: 12px; width: auto;"
+                                    onclick="startKeyCapture('ptt')">Edit</button>
                             </div>
                         </div>
-                    </label>
-                    <div id="ai-aggressiveness-container"
-                        style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; display: none;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="font-size: 0.85rem; color: var(--text-primary);">Suppress Aggressiveness</span>
-                            <span id="ai-aggressiveness-value"
-                                style="color: var(--accent-light); font-size: 0.85rem;">50%</span>
+                        <div class="setting-row">
+                            <span class="setting-label">Shout (Broadcast)</span>
+                            <div class="setting-control">
+                                <div id="shout-key-input" class="keybind-display">B</div>
+                                <button class="btn btn-secondary"
+                                    style="margin: 0; padding: 6px 12px; font-size: 12px; width: auto;"
+                                    onclick="startKeyCapture('shout')">Edit</button>
+                            </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="font-size: 10px; color: var(--text-muted);">Normal</span>
+                    </div>
+                </div>
+
+                <!-- Voice Section -->
+                <div class="settings-section">
+                    <div class="settings-section-header">Audio Processing</div>
+
+                    <!-- AI Feature Card -->
+                    <div class="feature-card" id="ai-feature-card">
+                        <div class="feature-header">
+                            <div>
+                                <div class="feature-title">AI Noise Cancellation</div>
+                                <div class="feature-desc">
+                                    Advanced neural network suppression. Eliminates keyboard clicks, static, and
+                                    background chatter.
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="ai-noise-cancel-check" checked
+                                    onchange="toggleAiCardStyle()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+
+                        <div id="ai-aggressiveness-container" style="margin-top: 24px;">
+                            <div class="range-label-row">
+                                <span>Suppression Intensity</span>
+                                <span id="ai-aggressiveness-value" style="color: var(--accent);">50%</span>
+                            </div>
                             <input type="range" id="ai-aggressiveness-slider" min="0" max="100" value="50"
-                                style="flex: 1; accent-color: var(--accent);">
-                            <span style="font-size: 10px; color: var(--text-muted);">Max</span>
+                                class="custom-range"
+                                style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 50%, #333 50%, #333 100%);">
                         </div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Noise Gate Sensitivity</label>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <span style="font-size: 12px; color: var(--text-muted);">Low</span>
-                        <input type="range" id="noise-gate-slider" min="0" max="100" value="30"
-                            style="flex: 1; accent-color: var(--accent);">
-                        <span style="font-size: 12px; color: var(--text-muted);">High</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                        <span style="font-size: 11px; color: var(--text-muted);">Threshold: <span
-                                id="noise-threshold-value">30</span>%</span>
-                        <div id="mic-level-container"
-                            style="width: 100px; height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
-                            <div id="mic-level-bar"
-                                style="width: 0%; height: 100%; background: var(--success); transition: width 0.05s;">
+                <!-- Profile Section -->
+                <div class="settings-section">
+                    <div class="settings-section-header">Profile Appearance</div>
+                    <div class="setting-card">
+                        <div class="setting-row">
+                            <span class="setting-label">Avatar Color</span>
+                            <div class="setting-control">
+                                <input type="color" id="profile-color-input" value="#CC2244"
+                                    style="border: none; background: none; width: 32px; height: 32px; cursor: pointer;">
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+                <!-- Gate Section -->
+                <div class="settings-section" style="margin-bottom: 0;">
+                    <div class="settings-section-header">Microphone Gate</div>
+                    <div class="setting-card" style="padding: 16px;">
+                        <div class="range-label-row" style="margin-top: 0;">
+                            <span>Gate Threshold</span>
+                            <span id="noise-threshold-value">30%</span>
+                        </div>
+                        <!-- Slider with dynamic background gradient -->
+                        <input type="range" id="noise-gate-slider" min="0" max="100" value="30" class="custom-range"
+                            style="margin-bottom: 16px; background: linear-gradient(to right, #333 0%, #333 30%, var(--success) 30%, var(--success) 100%);">
 
-            <div style="display: flex; gap: 8px;">
-                <button type="button" class="btn btn-primary" onclick="saveSettings()">Save</button>
-                <button type="button" class="btn btn-secondary" onclick="closeModal('settings-modal')">Cancel</button>
+                        <!-- Visualizer -->
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span style="font-size: 11px; color: var(--text-muted); width: 40px;">Input</span>
+                            <div style="flex: 1; height: 4px; background: #111; border-radius: 2px; overflow: hidden;">
+                                <div id="mic-level-bar"
+                                    style="width: 0%; height: 100%; background: var(--success); transition: width 0.05s;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- Close settings-content -->
+
+            <div style="margin-top: 32px; display: flex; justify-content: flex-end; gap: 12px;">
+                <button type="button" class="btn btn-secondary" style="width: auto; padding: 10px 24px;"
+                    onclick="closeModal('settings-modal')">Cancel</button>
+                <button type="button" class="btn btn-primary" style="width: auto; padding: 10px 24px;"
+                    onclick="saveSettings()">Save Changes</button>
             </div>
-        </div>
-    </div>
+        </div> <!-- Close modal -->
+    </div> <!-- Close modal-overlay -->
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="lib/app.js"></script>

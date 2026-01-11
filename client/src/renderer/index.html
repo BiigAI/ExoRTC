@@ -301,6 +301,20 @@
                             </div>
                         </div>
                     </label>
+                    <div id="ai-aggressiveness-container"
+                        style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; display: none;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 0.85rem; color: var(--text-primary);">Suppress Aggressiveness</span>
+                            <span id="ai-aggressiveness-value"
+                                style="color: var(--accent-light); font-size: 0.85rem;">50%</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 10px; color: var(--text-muted);">Normal</span>
+                            <input type="range" id="ai-aggressiveness-slider" min="0" max="100" value="50"
+                                style="flex: 1; accent-color: var(--accent);">
+                            <span style="font-size: 10px; color: var(--text-muted);">Max</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">

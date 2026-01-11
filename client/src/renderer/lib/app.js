@@ -12,7 +12,8 @@ const defaultSettings = {
     shoutKey: 'KeyB',
     shoutKeyDisplay: 'B',
     noiseGateThreshold: 30,
-    aiNoiseCancel: true
+    aiNoiseCancel: true,
+    aiAggressiveness: 50
 };
 
 let settings = { ...defaultSettings };
@@ -255,6 +256,7 @@ const audioEngine = {
                 await this.audioContext.audioWorklet.addModule('./lib/rnnoise/rnnoise-processor.js');
                 this.rnnoiseNode = new AudioWorkletNode(this.audioContext, 'rnnoise-processor');
                 this.rnnoiseNode.port.postMessage({ type: 'toggle', enabled: settings.aiNoiseCancel });
+                this.rnnoiseNode.port.postMessage({ type: 'setAggressiveness', value: settings.aiAggressiveness });
 
                 // Graph: Source -> RNNoise -> Destination
                 source.connect(this.rnnoiseNode);
@@ -839,6 +841,27 @@ function openSettings() {
     document.getElementById('noise-threshold-value').textContent = settings.noiseGateThreshold;
     document.getElementById('ai-noise-cancel-check').checked = settings.aiNoiseCancel;
 
+    // AI Tuning UI
+    const aiSlider = document.getElementById('ai-aggressiveness-slider');
+    const aiValue = document.getElementById('ai-aggressiveness-value');
+    const aiContainer = document.getElementById('ai-aggressiveness-container');
+    const aiCheck = document.getElementById('ai-noise-cancel-check');
+
+    aiSlider.value = settings.aiAggressiveness || 50;
+    aiValue.textContent = (settings.aiAggressiveness || 50) + '%';
+    aiContainer.style.display = settings.aiNoiseCancel ? 'block' : 'none';
+
+    // Dynamic UI updates
+    aiCheck.onchange = (e) => {
+        aiContainer.style.display = e.target.checked ? 'block' : 'none';
+        if (e.target.checked) {
+            // Re-sync slider if needed or just leave as is
+        }
+    };
+    aiSlider.oninput = (e) => {
+        aiValue.textContent = e.target.value + '%';
+    };
+
     openModal('settings-modal');
 
     // Start mic level monitoring
@@ -886,12 +909,14 @@ function handleKeyCapture(e) {
 function saveSettings() {
     settings.noiseGateThreshold = parseInt(document.getElementById('noise-gate-slider').value);
     settings.aiNoiseCancel = document.getElementById('ai-noise-cancel-check').checked;
+    settings.aiAggressiveness = parseInt(document.getElementById('ai-aggressiveness-slider').value);
 
     localStorage.setItem('exortc_settings', JSON.stringify(settings));
 
     // Update audio engine
     if (audioEngine.rnnoiseNode) {
         audioEngine.rnnoiseNode.port.postMessage({ type: 'toggle', enabled: settings.aiNoiseCancel });
+        audioEngine.rnnoiseNode.port.postMessage({ type: 'setAggressiveness', value: settings.aiAggressiveness });
     }
 
     closeModal('settings-modal');

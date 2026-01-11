@@ -1,6 +1,6 @@
-// Socket.IO client for real-time signaling
+import { config } from '../config';
 
-const SOCKET_URL = 'http://localhost:3000';
+const SOCKET_URL = config.SOCKET_URL;
 
 type EventCallback = (...args: any[]) => void;
 

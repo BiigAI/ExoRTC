@@ -29,3 +29,6 @@ Thumbs.db
 # Source code
 src.zip
 client/src.zip
+
+#cache
+*.cache

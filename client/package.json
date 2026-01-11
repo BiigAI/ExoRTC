@@ -8,11 +8,16 @@
         "start": "electron .",
         "dev": "tsc && electron .",
         "pack": "electron-builder --dir",
-        "dist": "electron-builder"
+        "dist": "electron-builder",
+        "build:win": "node scripts/build.js && electron-builder --win"
     },
     "build": {
         "appId": "com.exortc.client",
         "productName": "ExoRTC",
+        "files": [
+            "dist/**/*",
+            "package.json"
+        ],
         "directories": {
             "output": "release"
         },

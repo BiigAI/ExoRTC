@@ -1,6 +1,6 @@
-// API client for communicating with ExoRTC server
+import { config } from '../config';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = config.API_BASE;
 
 interface ApiResponse<T> {
     data?: T;

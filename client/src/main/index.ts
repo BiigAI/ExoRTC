@@ -20,8 +20,12 @@ function createWindow(): void {
         frame: true
     });
 
-    // Load the main HTML file (from src, not dist - static files aren't compiled)
-    mainWindow.loadFile(path.join(__dirname, '..', '..', 'src', 'renderer', 'index.html'));
+    // Load the main HTML file
+    if (app.isPackaged) {
+        mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    } else {
+        mainWindow.loadFile(path.join(__dirname, '..', '..', 'src', 'renderer', 'index.html'));
+    }
 
     // Open DevTools in development
     if (process.env.NODE_ENV === 'development') {

@@ -26,6 +26,97 @@ try {
     console.warn('Failed to load settings');
 }
 
+// Member Volume Settings (per-user volume control, stored in localStorage)
+const memberVolumeSettings = {
+    settings: {},
+    storageKey: 'exortc_member_volumes',
+
+    load() {
+        try {
+            const saved = localStorage.getItem(this.storageKey);
+            if (saved) {
+                this.settings = JSON.parse(saved);
+            }
+        } catch (e) {
+            console.warn('Failed to load member volume settings');
+            this.settings = {};
+        }
+    },
+
+    save() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.settings));
+        } catch (e) {
+            console.warn('Failed to save member volume settings');
+        }
+    },
+
+    getSettings(userId) {
+        if (!this.settings[userId]) {
+            this.settings[userId] = { volume: 100, muted: false };
+        }
+        return this.settings[userId];
+    },
+
+    getVolume(userId) {
+        return this.getSettings(userId).volume;
+    },
+
+    setVolume(userId, volume) {
+        const settings = this.getSettings(userId);
+        settings.volume = Math.max(0, Math.min(200, volume));
+        this.save();
+        this.applyVolume(userId);
+    },
+
+    isMuted(userId) {
+        return this.getSettings(userId).muted;
+    },
+
+    setMuted(userId, muted) {
+        const settings = this.getSettings(userId);
+        settings.muted = muted;
+        this.save();
+        this.applyVolume(userId);
+    },
+
+    toggleMute(userId) {
+        const settings = this.getSettings(userId);
+        settings.muted = !settings.muted;
+        this.save();
+        this.applyVolume(userId);
+        return settings.muted;
+    },
+
+    getEffectiveVolume(userId) {
+        const settings = this.getSettings(userId);
+        if (settings.muted) return 0;
+        return settings.volume / 100; // Convert to 0-2 range for audio element
+    },
+
+    applyVolume(userId) {
+        const audio = document.getElementById(`audio-${userId}`);
+        if (audio) {
+            const baseVolume = this.getEffectiveVolume(userId);
+            // Apply ducking if active
+            const duckingMultiplier = audioEngine.isDucking ? 0.5 : 1.0;
+            audio.volume = Math.min(1, baseVolume * duckingMultiplier);
+            // Note: HTML5 audio maxes at 1.0, for >100% we'd need Web Audio API gain
+            // For simplicity, we cap at 1.0 but the slider goes to 200% as visual feedback
+        }
+    },
+
+    applyAllVolumes() {
+        document.querySelectorAll('audio[id^="audio-"]').forEach(audio => {
+            const userId = audio.id.replace('audio-', '');
+            this.applyVolume(userId);
+        });
+    }
+};
+
+// Load member volume settings on startup
+memberVolumeSettings.load();
+
 // Audio analysis for noise gate
 let audioAnalyser = null;
 let audioDataArray = null;
@@ -500,8 +591,8 @@ const audioEngine = {
             document.body.appendChild(audio);
         }
         audio.srcObject = stream;
-        // Apply current ducking state
-        audio.volume = this.isDucking ? 0.5 : 1.0;
+        // Apply stored volume settings (respects mute and custom volume)
+        memberVolumeSettings.applyVolume(userId);
     },
 
     closePeerConnection(userId) {
@@ -539,12 +630,8 @@ const audioEngine = {
 
     setDucking(enabled) {
         this.isDucking = enabled;
-        const volume = enabled ? 0.5 : 1.0;
-
-        // Apply to all remote audio elements
-        document.querySelectorAll('audio[id^="audio-"]').forEach(audio => {
-            audio.volume = volume;
-        });
+        // Apply ducking to all remote audio elements, respecting per-user volumes
+        memberVolumeSettings.applyAllVolumes();
     }
 };
 
@@ -1134,6 +1221,110 @@ window.deleteSelectedRoom = deleteSelectedRoom;
 // Hide context menu on click elsewhere
 document.addEventListener('click', hideRoomContextMenu);
 
+// Member context menu state
+let contextMenuMemberId = null;
+let contextMenuMemberName = null;
+
+function showMemberContextMenu(x, y, userId, username) {
+    const menu = document.getElementById('member-context-menu');
+    contextMenuMemberId = userId;
+    contextMenuMemberName = username;
+
+    // Update UI with current settings
+    const volume = memberVolumeSettings.getVolume(userId);
+    const isMuted = memberVolumeSettings.isMuted(userId);
+    const slider = document.getElementById('member-volume-slider');
+    const percentage = (volume / 200) * 100;
+
+    document.getElementById('member-context-name').textContent = username;
+    slider.value = volume;
+    slider.style.background = `linear-gradient(to right, var(--accent) ${percentage}%, #333 ${percentage}%)`;
+    document.getElementById('member-volume-value').textContent = `${volume}%`;
+    updateMemberMuteButton(isMuted);
+
+    // Position menu
+    const menuWidth = 220;
+    const menuHeight = 180;
+    let posX = x;
+    let posY = y;
+
+    // Keep menu within viewport
+    if (x + menuWidth > window.innerWidth) {
+        posX = window.innerWidth - menuWidth - 10;
+    }
+    if (y + menuHeight > window.innerHeight) {
+        posY = window.innerHeight - menuHeight - 10;
+    }
+
+    menu.style.left = `${posX}px`;
+    menu.style.top = `${posY}px`;
+    menu.classList.remove('hidden');
+}
+
+function hideMemberContextMenu() {
+    const menu = document.getElementById('member-context-menu');
+    menu.classList.add('hidden');
+    contextMenuMemberId = null;
+    contextMenuMemberName = null;
+}
+
+function updateMemberMuteButton(isMuted) {
+    const muteBtn = document.getElementById('member-mute-toggle');
+    const muteText = muteBtn.querySelector('span');
+    const muteIcon = muteBtn.querySelector('svg');
+
+    if (isMuted) {
+        muteText.textContent = 'Unmute';
+        muteBtn.classList.add('muted');
+        muteIcon.innerHTML = `
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+        `;
+    } else {
+        muteText.textContent = 'Mute';
+        muteBtn.classList.remove('muted');
+        muteIcon.innerHTML = `
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+        `;
+    }
+}
+
+function handleMemberVolumeChange(e) {
+    if (!contextMenuMemberId) return;
+    const volume = parseInt(e.target.value, 10);
+    const slider = e.target;
+    const percentage = (volume / 200) * 100;
+
+    document.getElementById('member-volume-value').textContent = `${volume}%`;
+    slider.style.background = `linear-gradient(to right, var(--accent) ${percentage}%, #333 ${percentage}%)`;
+    memberVolumeSettings.setVolume(contextMenuMemberId, volume);
+}
+
+function handleMemberMuteToggle() {
+    if (!contextMenuMemberId) return;
+    const isMuted = memberVolumeSettings.toggleMute(contextMenuMemberId);
+    updateMemberMuteButton(isMuted);
+    updateRoomMembersUI(); // Refresh to show/hide muted icon
+}
+
+// Make member context menu functions available globally
+window.handleMemberVolumeChange = handleMemberVolumeChange;
+window.handleMemberMuteToggle = handleMemberMuteToggle;
+
+// Hide member context menu on click elsewhere (but not on the menu itself)
+document.addEventListener('click', (e) => {
+    const menu = document.getElementById('member-context-menu');
+    if (menu && !menu.contains(e.target)) {
+        hideMemberContextMenu();
+    }
+});
+
 function updateRoomMembersUI() {
     const roomMembersEl = document.getElementById('room-members');
     const allMembers = [{ user_id: currentUser.id, username: currentUser.username }, ...roomMembers];
@@ -1141,15 +1332,43 @@ function updateRoomMembersUI() {
     roomMembersEl.innerHTML = allMembers.map(m => {
         const color = m.user_id === currentUser.id ? (currentUser.profile_color || 'var(--accent)') : (m.profile_color || 'var(--accent)');
         const avatarSvg = generateAvatarSVG(m.username, color);
+        const isMuted = m.user_id !== currentUser.id && memberVolumeSettings.isMuted(m.user_id);
+        const mutedClass = isMuted ? ' muted' : '';
+        const mutedIcon = isMuted ? `
+            <div class="member-muted-icon" title="Muted">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </div>
+        ` : '';
 
         return `
-        <div class="member-card" data-user-id="${m.user_id}">
+        <div class="member-card${mutedClass}" data-user-id="${m.user_id}">
             <div class="member-avatar" style="background: none; overflow: hidden; padding: 0;">${avatarSvg}</div>
+            ${mutedIcon}
             <div class="member-name">${m.username}${m.user_id === currentUser.id ? ' (You)' : ''}</div>
             <div class="member-status">In channel</div>
         </div>
         `;
     }).join('');
+
+    // Add right-click handlers to other users' cards for volume control
+    roomMembersEl.querySelectorAll('.member-card').forEach(card => {
+        const userId = card.dataset.userId;
+        if (userId !== currentUser.id.toString()) {
+            card.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const member = allMembers.find(m => m.user_id.toString() === userId);
+                if (member) {
+                    showMemberContextMenu(e.clientX, e.clientY, userId, member.username);
+                }
+            });
+        }
+    });
 }
 
 function updateShoutButton() {

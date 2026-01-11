@@ -40,7 +40,7 @@ function playSound(filename) {
     } else {
         audioCache[filename].currentTime = 0;
     }
-    audioCache[filename].volume = 0.1; // Force distinct volume reduction on every play
+    audioCache[filename].volume = 0.05; // Global volume for sound effects
     audioCache[filename].play().catch(e => console.warn('Audio play failed:', e));
 }
 
@@ -697,6 +697,9 @@ function setupSocketHandlers() {
     socketManager.on('shout-ended', (data) => {
         audioEngine.closePeerConnection(data.fromUserId);
 
+        // Play end shout sound
+        playSound('endcomm.ogg');
+
         // End audio ducking (only when all shouts have ended)
         activeShoutCount = Math.max(0, activeShoutCount - 1);
         if (activeShoutCount === 0) {
@@ -811,6 +814,9 @@ function handleShout(pressed) {
         if (myCard) myCard.classList.remove('shouting');
         audioEngine.setMuted(true);
         socketManager.endShout(currentServer.id);
+
+        // Play end shout sound
+        playSound('endcomm.ogg');
 
         // End shouter's own ducking
         activeShoutCount = Math.max(0, activeShoutCount - 1);
@@ -1327,10 +1333,14 @@ async function toggleShout(userId, hasShout) {
 async function changeRole(userId, newRole) {
     if (!currentServer) return;
 
+    console.log('DEBUG: changeRole called with', { userId, newRole, serverId: currentServer.id });
+
     const result = await api.request('POST', `/servers/${currentServer.id}/role`, {
         user_id: userId,
         role: newRole
     });
+
+    console.log('DEBUG: changeRole result', result);
 
     if (result.error) {
         console.error('Failed to change role:', result.error);

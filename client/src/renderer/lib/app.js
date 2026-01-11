@@ -868,10 +868,45 @@ function updateRoomListUI() {
         `;
     }).join('');
 
+    const tooltip = document.getElementById('room-tooltip');
+    const tooltipTitle = tooltip.querySelector('.room-tooltip-title');
+    const tooltipMembers = tooltip.querySelector('.room-tooltip-members');
+
     roomList.querySelectorAll('.room-item').forEach(el => {
+        const roomId = el.dataset.roomId;
+        const room = rooms.find(r => r.id === roomId);
+
+        // Click to join
         el.addEventListener('click', () => {
-            const room = rooms.find(r => r.id === el.dataset.roomId);
             if (room) joinRoom(room);
+        });
+
+        // Hover to show members
+        el.addEventListener('mouseenter', (e) => {
+            if (!room) return;
+
+            tooltipTitle.textContent = `Members in ${room.name}`;
+
+            if (room.members && room.members.length > 0) {
+                tooltipMembers.innerHTML = room.members.map(member => `
+                    <div class="room-tooltip-member">
+                        <div class="room-tooltip-member-avatar" style="background: ${member.profile_color || 'var(--accent)'}"></div>
+                        <span>${member.username}</span>
+                    </div>
+                `).join('');
+            } else {
+                tooltipMembers.innerHTML = '<div class="room-tooltip-empty">No members connected</div>';
+            }
+
+            // Position tooltip
+            const rect = el.getBoundingClientRect();
+            tooltip.style.left = `${rect.right + 12}px`;
+            tooltip.style.top = `${rect.top}px`;
+            tooltip.classList.remove('hidden');
+        });
+
+        el.addEventListener('mouseleave', () => {
+            tooltip.classList.add('hidden');
         });
     });
 }

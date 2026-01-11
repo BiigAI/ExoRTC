@@ -88,3 +88,30 @@ export function getRoomsWithMemberCounts(serverId: string): (Room & { member_cou
         GROUP BY r.id
     `, [serverId]);
 }
+
+export function getRoomsWithMembers(serverId: string): (Room & {
+    member_count: number,
+    members: Array<{ username: string, profile_color?: string }>
+})[] {
+    const rooms = db.all<Room & { member_count: number }>(`
+        SELECT r.*, COUNT(rm.user_id) as member_count
+        FROM rooms r
+        LEFT JOIN room_members rm ON r.id = rm.room_id
+        WHERE r.server_id = ?
+        GROUP BY r.id
+    `, [serverId]);
+
+    return rooms.map(room => {
+        const members = db.all<{ username: string, profile_color?: string }>(`
+            SELECT u.username, u.profile_color
+            FROM room_members rm
+            INNER JOIN users u ON rm.user_id = u.id
+            WHERE rm.room_id = ?
+        `, [room.id]);
+
+        return {
+            ...room,
+            members
+        };
+    });
+}

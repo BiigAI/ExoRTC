@@ -5,7 +5,7 @@ import {
     getRoomsByServerId,
     getRoomById,
     deleteRoom,
-    getRoomsWithMemberCounts
+    getRoomsWithMembers
 } from '../services/rooms';
 import { isServerAdmin, getServerById } from '../services/servers';
 
@@ -30,7 +30,7 @@ router.get('/servers/:serverId/rooms', (req: AuthenticatedRequest, res: Response
         return;
     }
 
-    const rooms = getRoomsWithMemberCounts(serverId);
+    const rooms = getRoomsWithMembers(serverId);
     res.json({ rooms });
 });
 

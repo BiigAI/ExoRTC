@@ -16,6 +16,38 @@
     --shout: #f59e0b;
 }
 
+/* Global Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #2a2a2a;
+    border-radius: 10px;
+    border: 2px solid var(--bg-primary);
+    transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: var(--accent);
+}
+
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a2a var(--bg-primary);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -40,6 +72,9 @@ body {
     height: 100vh;
     background: var(--bg-primary);
     overflow: hidden;
+    position: relative;
+    padding-bottom: 32px;
+    /* Space for status bar */
 }
 
 .mobile-header {
@@ -217,6 +252,62 @@ body {
     border-radius: 12px;
 }
 
+/* Room Tooltip */
+.room-tooltip {
+    position: fixed;
+    background: #1a1a1a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    min-width: 180px;
+    max-width: 250px;
+    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.room-tooltip:not(.hidden) {
+    opacity: 1;
+}
+
+.room-tooltip-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.room-tooltip-members {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.room-tooltip-member {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.room-tooltip-member-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.room-tooltip-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Main content */
 /* Stage (Main Con/* Stage Area */
 .stage-container {
@@ -378,6 +469,9 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    position: relative;
+    z-index: 10;
+    /* Above status bar */
 }
 
 .ptt-button {
@@ -455,6 +549,8 @@ body {
     font-weight: 500;
     justify-content: flex-end;
     /* Right align */
+    z-index: 1;
+    /* Lower than controls-bar */
 }
 
 .status-indicator {

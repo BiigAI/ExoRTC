@@ -1057,10 +1057,17 @@ function setupSocketHandlers() {
     });
 
     socketManager.on('you-are-kicked', (data) => {
-        alert(`You have been kicked from the server.\nReason: ${data.reason || 'None'}\nDuration: ${data.duration} minutes`);
-        // Disconnection happens via socket closing or 'room-left' from server
-        // But we should ensure we clean up
-        socketManager.leaveRoom();
+        // Immediately leave the room to stop audio and update UI
+        leaveCurrentRoom();
+
+        // Show notification after a brief delay to ensure UI has updated
+        setTimeout(() => {
+            alert(`You have been kicked from the server.\nReason: ${data.reason || 'None'}\nDuration: ${data.duration} minutes`);
+        }, 100);
+    });
+
+    socketManager.on('error', (data) => {
+        showError(data.message || 'An error occurred');
     });
 
     // Listen for room updates (new rooms, member count changes)
@@ -1562,10 +1569,7 @@ function showMemberContextMenu(x, y, userId, username) {
             kickItem.className = 'context-menu-item dynamic-item';
             kickItem.innerHTML = `<span style="color:var(--danger)">Kick (Temp)</span>`;
             kickItem.onclick = () => {
-                const duration = prompt('Kick duration (minutes):', '15');
-                if (duration) {
-                    socketManager.emit('kick-user', { serverId: currentServer.id, userId, duration: parseInt(duration) || 15 });
-                }
+                openKickModal(userId, member.username);
                 hideMemberContextMenu();
             };
             body.appendChild(kickItem);
@@ -1695,6 +1699,7 @@ function closeModal(id) {
         micLevelInterval = null;
     }
 }
+window.closeModal = closeModal;
 
 // Settings management
 let capturingKey = null;
@@ -2051,6 +2056,35 @@ document.getElementById('create-room-form').addEventListener('submit', async (e)
         await loadRooms(currentServer.id);
     } else if (result.error) {
         showError(result.error);
+    }
+});
+
+// Kick Modal Logic
+function openKickModal(userId, username) {
+    document.getElementById('kick-user-id').value = userId;
+    document.getElementById('kick-user-name').value = username;
+    document.getElementById('kick-duration').value = 15;
+    document.getElementById('kick-reason').value = '';
+    openModal('kick-modal');
+}
+window.openKickModal = openKickModal;
+
+document.getElementById('kick-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!currentServer) return;
+
+    const userId = document.getElementById('kick-user-id').value;
+    const duration = parseInt(document.getElementById('kick-duration').value, 10);
+    const reason = document.getElementById('kick-reason').value;
+
+    if (userId && duration) {
+        socketManager.emit('kick-user', {
+            serverId: currentServer.id,
+            userId,
+            duration,
+            reason: reason || undefined
+        });
+        closeModal('kick-modal');
     }
 });
 

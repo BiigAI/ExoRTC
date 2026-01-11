@@ -1,0 +1,38 @@
+{
+    "name": "exortc-client",
+    "version": "1.0.0",
+    "description": "ExoRTC P2P Voice Platform - Desktop Client",
+    "main": "dist/main/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "electron .",
+        "dev": "tsc && electron .",
+        "pack": "electron-builder --dir",
+        "dist": "electron-builder"
+    },
+    "build": {
+        "appId": "com.exortc.client",
+        "productName": "ExoRTC",
+        "directories": {
+            "output": "release"
+        },
+        "win": {
+            "target": "nsis"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    },
+    "dependencies": {
+        "socket.io-client": "^4.7.2",
+        "simple-peer": "^9.11.1",
+        "uiohook-napi": "^1.5.4"
+    },
+    "devDependencies": {
+        "electron": "^28.1.0",
+        "electron-builder": "^24.9.1",
+        "@types/node": "^20.10.5",
+        "typescript": "^5.3.3"
+    }
+}

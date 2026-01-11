@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CSP disabled for development - add back for production
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdn.socket.io; style-src 'self' 'unsafe-inline'; connect-src *">
+    -->
+    <title>ExoRTC</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+
+<body>
+    <!-- Auth Page -->
+    <div id="auth-page" class="auth-container">
+        <div class="auth-box">
+            <h1>🎙️ ExoRTC</h1>
+            <p>P2P Voice Communication</p>
+
+            <div id="error-message" class="error-message"></div>
+
+            <!-- Login Form -->
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Username or Email</label>
+                    <input type="text" id="login-username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+
+            <!-- Register Form (hidden by default) -->
+            <form id="register-form" class="hidden">
+                <div class="form-group">
+                    <label for="register-username">Username</label>
+                    <input type="text" id="register-username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="register-email">Email</label>
+                    <input type="email" id="register-email" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" required minlength="6" autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </form>
+
+            <div id="login-switch" class="auth-switch">
+                Don't have an account? <a href="#" id="show-register">Sign up</a>
+            </div>
+            <div id="register-switch" class="auth-switch hidden">
+                Already have an account? <a href="#" id="show-login">Login</a>
+            </div>
+
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); text-align: center;">
+                <a href="#" id="change-server-btn" style="color: var(--text-muted); font-size: 12px;">⚙️ Server: <span
+                        id="current-server-display">localhost</span></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App (hidden by default) -->
+    <div id="app-page" class="hidden" style="display: flex; width: 100%; height: 100%;">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>ExoRTC</h2>
+            </div>
+
+            <!-- Servers -->
+            <div class="server-list" id="server-list">
+                <!-- Servers will be populated here -->
+            </div>
+
+            <!-- Actions -->
+            <div style="padding: 8px; border-top: 1px solid var(--border);">
+                <button class="btn btn-secondary" id="create-server-btn" style="font-size: 12px;">+ Create
+                    Server</button>
+                <button class="btn btn-secondary" id="join-server-btn" style="font-size: 12px; margin-top: 4px;">🔗 Join
+                    Server</button>
+            </div>
+
+            <!-- Rooms -->
+            <div class="room-list" id="room-section" style="display: none;">
+                <div style="display: flex; align-items: center; justify-content: space-between; padding-right: 8px;">
+                    <h3>Voice Channels</h3>
+                    <button id="create-room-btn"
+                        style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"
+                        title="Create Room">+</button>
+                </div>
+                <div id="room-list">
+                    <!-- Rooms will be populated here -->
+                </div>
+                <button id="manage-members-btn" class="btn btn-secondary"
+                    style="font-size: 12px; margin-top: 8px; width: 100%;">👥 Manage Members</button>
+            </div>
+
+            <!-- User info -->
+            <div
+                style="padding: 12px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px;">
+                <div id="user-avatar"
+                    style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 600;">
+                </div>
+                <div style="flex: 1;">
+                    <div id="user-name" style="font-size: 13px; font-weight: 500;"></div>
+                    <div style="font-size: 11px; color: var(--text-muted);">Online</div>
+                </div>
+                <button id="logout-btn"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"
+                    title="Logout">⚙️</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- No room selected state -->
+            <div id="no-room-view"
+                style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted);">
+                <div style="font-size: 48px; margin-bottom: 16px;">🎙️</div>
+                <div style="font-size: 18px;">Select a voice channel to join</div>
+            </div>
+
+            <!-- Room view (hidden by default) -->
+            <div id="room-view" class="hidden" style="display: flex; flex-direction: column; flex: 1;">
+                <div class="room-header">
+                    <div class="room-title" id="current-room-name">General</div>
+                    <button id="leave-room-btn"
+                        style="background: var(--danger); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Leave</button>
+                </div>
+
+                <div class="room-members" id="room-members">
+                    <!-- Members will be populated here -->
+                </div>
+
+                <div class="controls-bar">
+                    <button class="ptt-button ptt" id="ptt-btn">
+                        <span>🎤</span>
+                        <span>Push to Talk</span>
+                        <kbd id="ptt-key">V</kbd>
+                    </button>
+                    <button class="ptt-button shout" id="shout-btn">
+                        <span>📢</span>
+                        <span>Shout</span>
+                        <kbd id="shout-key">B</kbd>
+                    </button>
+                    <div class="device-info">
+                        <span>🎤 <span id="input-device">Default</span></span>
+                        <span>🔊 <span id="output-device">Speakers</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status bar -->
+    <div id="status-bar" class="status-bar hidden" style="position: fixed; bottom: 0; left: 0; right: 0;">
+        <div class="status-indicator">
+            <div class="status-dot" id="connection-status"></div>
+            <span id="connection-text">Connected</span>
+        </div>
+        <span style="color: var(--text-muted);">|</span>
+        <span id="ping-display">Ping: --ms</span>
+    </div>
+
+    <!-- Modals -->
+    <div id="create-server-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Create Server</h2>
+            <form id="create-server-form">
+                <div class="form-group">
+                    <label for="server-name">Server Name</label>
+                    <input type="text" id="server-name" required placeholder="My Gaming Server">
+                </div>
+                <button type="submit" class="btn btn-primary">Create</button>
+                <button type="button" class="btn btn-secondary"
+                    onclick="closeModal('create-server-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="join-server-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Join Server</h2>
+            <form id="join-server-form">
+                <div class="form-group">
+                    <label for="invite-code">Invite Code</label>
+                    <input type="text" id="invite-code" required placeholder="ABC123" maxlength="6"
+                        style="text-transform: uppercase;">
+                </div>
+                <button type="submit" class="btn btn-primary">Join</button>
+                <button type="button" class="btn btn-secondary"
+                    onclick="closeModal('join-server-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="create-room-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Create Room</h2>
+            <form id="create-room-form">
+                <div class="form-group">
+                    <label for="room-name">Room Name</label>
+                    <input type="text" id="room-name" required placeholder="Alpha Squad">
+                </div>
+                <button type="submit" class="btn btn-primary">Create</button>
+                <button type="button" class="btn btn-secondary"
+                    onclick="closeModal('create-room-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="server-settings-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Server Settings</h2>
+            <form id="server-settings-form">
+                <div class="form-group">
+                    <label for="server-url-input">Server URL</label>
+                    <input type="text" id="server-url-input" required placeholder="http://192.168.1.100:3000">
+                </div>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                    Enter the IP address of the server you want to connect to.
+                </p>
+                <button type="submit" class="btn btn-primary">Save & Reload</button>
+                <button type="button" class="btn btn-secondary"
+                    onclick="closeModal('server-settings-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="members-modal" class="modal-overlay">
+        <div class="modal" style="max-width: 500px;">
+            <h2>Server Members</h2>
+            <div id="members-list" style="max-height: 400px; overflow-y: auto;">
+                <!-- Members will be populated here -->
+            </div>
+            <button type="button" class="btn btn-secondary" style="margin-top: 16px;"
+                onclick="closeModal('members-modal')">Close</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="lib/app.js"></script>
+</body>
+
+</html>

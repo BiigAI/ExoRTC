@@ -1,7 +1,7 @@
 import { Server as SocketServer, Socket } from 'socket.io';
 import { verifyToken } from './auth';
 import { joinRoom, leaveRoom, getRoomMembers, getRoomById, getUserCurrentRoom } from './rooms';
-import { hasShoutPermission, getActiveShoutUsers } from './permissions';
+import { hasShoutPermission, getActiveShoutUsers, canShoutByRole, getActiveShoutListeners } from './permissions';
 import { getUserById } from './auth';
 
 interface AuthenticatedSocket extends Socket {
@@ -164,28 +164,31 @@ export function initializeSignaling(io: SocketServer): void {
             }
         });
 
-        // Shout: broadcast to all users with shout permission in the server
+        // Shout: broadcast to all users who can hear shouts (role-based) in the server
         socket.on('shout-start', (serverId: string) => {
             if (!socket.userId) return;
 
-            // Verify user has shout permission
-            if (!hasShoutPermission(socket.userId, serverId)) {
-                socket.emit('error', { message: 'Shout permission required' });
+            // Verify user has shout permission via role
+            if (!canShoutByRole(socket.userId, serverId)) {
+                socket.emit('error', { message: 'Shout permission required (role-based)' });
                 return;
             }
 
-            // Get all active users with shout permission (squad leaders)
-            const shoutUsers = getActiveShoutUsers(serverId);
+            const shouterRoomId = socket.currentRoomId;
 
-            // Notify all squad leaders that a shout is starting
-            shoutUsers.forEach(user => {
+            // Get all users who can hear shouts (squad_leader, pmc_member, admin, owner)
+            const listeners = getActiveShoutListeners(serverId);
+
+            // Notify all listeners that a shout is starting
+            listeners.forEach(user => {
                 if (user.user_id !== socket.userId) {
                     const targetSocket = findSocketByUserId(io, user.user_id);
                     if (targetSocket) {
                         targetSocket.emit('shout-incoming', {
                             fromUserId: socket.userId,
                             fromUsername: socket.username,
-                            serverId
+                            serverId,
+                            shouterRoomId // So listeners can mute shouter from their channel
                         });
                     }
                 }
@@ -193,7 +196,7 @@ export function initializeSignaling(io: SocketServer): void {
 
             // Return list of target users for WebRTC connections
             socket.emit('shout-targets', {
-                targets: shoutUsers
+                targets: listeners
                     .filter(u => u.user_id !== socket.userId)
                     .map(u => ({ userId: u.user_id, username: u.username }))
             });
@@ -202,9 +205,9 @@ export function initializeSignaling(io: SocketServer): void {
         socket.on('shout-end', (serverId: string) => {
             if (!socket.userId) return;
 
-            const shoutUsers = getActiveShoutUsers(serverId);
+            const listeners = getActiveShoutListeners(serverId);
 
-            shoutUsers.forEach(user => {
+            listeners.forEach(user => {
                 if (user.user_id !== socket.userId) {
                     const targetSocket = findSocketByUserId(io, user.user_id);
                     if (targetSocket) {

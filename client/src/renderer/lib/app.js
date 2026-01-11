@@ -476,6 +476,8 @@ const audioEngine = {
             document.body.appendChild(audio);
         }
         audio.srcObject = stream;
+        // Apply current ducking state
+        audio.volume = this.isDucking ? 0.5 : 1.0;
     },
 
     closePeerConnection(userId) {
@@ -506,6 +508,19 @@ const audioEngine = {
             this.audioContext.close();
             this.audioContext = null;
         }
+    },
+
+    // Audio ducking for shout - reduce remote audio volume to 50%
+    isDucking: false,
+
+    setDucking(enabled) {
+        this.isDucking = enabled;
+        const volume = enabled ? 0.5 : 1.0;
+
+        // Apply to all remote audio elements
+        document.querySelectorAll('audio[id^="audio-"]').forEach(audio => {
+            audio.volume = volume;
+        });
     }
 };
 
@@ -520,6 +535,7 @@ let roomMembers = [];
 let canShout = false;
 let isPttActive = false;
 let isShoutActive = false;
+let activeShoutCount = 0; // Track active shouts for audio ducking
 
 // Role-based permission helpers (same logic as server)
 function canManageMembers(role) {
@@ -663,15 +679,41 @@ function setupSocketHandlers() {
         }
     });
 
+    // Track active shouts for ducking (using global activeShoutCount)
+
     socketManager.on('shout-incoming', async (data) => {
+        // Play incoming sound for listeners
+        playSound('incoming.ogg');
+
+        // Start audio ducking (only if not already ducking)
+        if (activeShoutCount === 0) {
+            audioEngine.setDucking(true);
+        }
+        activeShoutCount++;
+
         await audioEngine.createPeerConnection(data.fromUserId, data.fromUsername, false);
     });
 
     socketManager.on('shout-ended', (data) => {
         audioEngine.closePeerConnection(data.fromUserId);
+
+        // End audio ducking (only when all shouts have ended)
+        activeShoutCount = Math.max(0, activeShoutCount - 1);
+        if (activeShoutCount === 0) {
+            audioEngine.setDucking(false);
+        }
     });
 
     socketManager.on('shout-targets', async (data) => {
+        // Shouter also plays the incoming sound
+        playSound('incoming.ogg');
+
+        // Shouter also ducks their channel audio
+        if (activeShoutCount === 0) {
+            audioEngine.setDucking(true);
+        }
+        activeShoutCount++;
+
         for (const target of data.targets) {
             await audioEngine.createPeerConnection(target.userId, target.username, true);
         }
@@ -769,6 +811,12 @@ function handleShout(pressed) {
         if (myCard) myCard.classList.remove('shouting');
         audioEngine.setMuted(true);
         socketManager.endShout(currentServer.id);
+
+        // End shouter's own ducking
+        activeShoutCount = Math.max(0, activeShoutCount - 1);
+        if (activeShoutCount === 0) {
+            audioEngine.setDucking(false);
+        }
     }
 }
 

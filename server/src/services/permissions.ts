@@ -48,3 +48,28 @@ export function getActiveShoutUsers(serverId: string): { user_id: string; userna
         WHERE sp.server_id = ? AND r.server_id = ?
     `, [serverId, serverId]);
 }
+
+// Role-based shout permission check (squad_leader, pmc_member, admin, owner can shout)
+export function canShoutByRole(userId: string, serverId: string): boolean {
+    const row = db.get<{ role: string }>(`
+        SELECT role FROM server_members 
+        WHERE user_id = ? AND server_id = ?
+    `, [userId, serverId]);
+
+    if (!row) return false;
+    return ['owner', 'admin', 'pmc_member', 'squad_leader'].includes(row.role);
+}
+
+// Get all users who can HEAR shouts (same roles that can shout) who are currently in a room
+export function getActiveShoutListeners(serverId: string): { user_id: string; username: string; room_id: string }[] {
+    return db.all<{ user_id: string; username: string; room_id: string }>(`
+        SELECT sm.user_id, u.username, rm.room_id
+        FROM server_members sm
+        INNER JOIN users u ON sm.user_id = u.id
+        INNER JOIN room_members rm ON sm.user_id = rm.user_id
+        INNER JOIN rooms r ON rm.room_id = r.id
+        WHERE sm.server_id = ? 
+        AND r.server_id = ?
+        AND sm.role IN ('owner', 'admin', 'pmc_member', 'squad_leader')
+    `, [serverId, serverId]);
+}

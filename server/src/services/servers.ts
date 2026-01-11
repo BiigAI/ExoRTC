@@ -63,7 +63,13 @@ export function getServersByUserId(userId: string): Server[] {
         SELECT s.* FROM servers s
         INNER JOIN server_members sm ON s.id = sm.server_id
         WHERE sm.user_id = ?
-    `, [userId]);
+        AND NOT EXISTS (
+            SELECT 1 FROM server_kicks sk 
+            WHERE sk.server_id = s.id 
+            AND sk.user_id = ? 
+            AND sk.expires_at > datetime('now')
+        )
+    `, [userId, userId]);
 }
 
 export function getServerById(serverId: string): Server | null {
@@ -86,8 +92,20 @@ export function joinServer(userId: string, inviteCode: string): { server: Server
         return { error: 'Already a member of this server' };
     }
 
+    // Check if user is kicked
+    const activeKick = db.get('SELECT expires_at FROM server_kicks WHERE server_id = ? AND user_id = ? AND expires_at > datetime("now")', [server.id, userId]);
+    if (activeKick) {
+        // @ts-ignore
+        const expires = new Date(activeKick.expires_at).toLocaleTimeString();
+        return { error: `You are kicked from this server until ${expires}` };
+    }
+
     db.run('INSERT INTO server_members (user_id, server_id, role) VALUES (?, ?, ?)', [userId, server.id, 'member']);
     return { server };
+}
+
+export function removeServerMember(serverId: string, userId: string): void {
+    db.run('DELETE FROM server_members WHERE server_id = ? AND user_id = ?', [serverId, userId]);
 }
 
 export function getServerMembers(serverId: string): any[] {

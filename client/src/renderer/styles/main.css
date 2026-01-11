@@ -765,18 +765,38 @@ body {
 }
 
 .error-message {
-    background: rgba(239, 68, 68, 0.1);
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a1a1a;
     border: 1px solid var(--danger);
     color: var(--danger);
-    padding: 10px;
+    padding: 12px 24px;
     border-radius: 8px;
-    font-size: 13px;
-    margin-bottom: 16px;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 9999;
     display: none;
+    min-width: 300px;
+    text-align: center;
 }
 
 .error-message.show {
     display: block;
+    animation: slideInDown 0.3s ease-out;
+}
+
+@keyframes slideInDown {
+    from {
+        transform: translate(-50%, -20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
 }
 
 /* Modal */

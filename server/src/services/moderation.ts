@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import db from '../config/database';
+import { removeServerMember } from './servers';
 
 export interface Mute {
     id: string;
@@ -45,6 +46,9 @@ export function kickUser(serverId: string, userId: string, kickedBy: string, dur
 
     db.run('INSERT INTO server_kicks (id, server_id, user_id, kicked_by, expires_at, reason) VALUES (?, ?, ?, ?, ?, ?)',
         [id, serverId, userId, kickedBy, expiresAt, reason || null]);
+
+    // Remove user from server members so they can't re-join or see the server
+    removeServerMember(serverId, userId);
 
     return { id, server_id: serverId, user_id: userId, kicked_at: new Date().toISOString(), kicked_by: kickedBy, expires_at: expiresAt, reason };
 }

@@ -443,13 +443,22 @@ const audioEngine = {
     },
 
     // Mute/unmute outgoing audio to room connections (used during shout)
+    // Uses replaceTrack(null) to stop sending audio without affecting other connections
     setRoomAudioMuted(muted) {
         this.peers.forEach(peer => {
             if (peer.type === 'room' && peer.connection) {
                 const senders = peer.connection.getSenders();
                 senders.forEach(sender => {
-                    if (sender.track && sender.track.kind === 'audio') {
-                        sender.track.enabled = !muted;
+                    if (sender.track?.kind === 'audio' || peer.originalTrack) {
+                        if (muted) {
+                            // Store original track and replace with null
+                            peer.originalTrack = sender.track;
+                            sender.replaceTrack(null);
+                        } else if (peer.originalTrack) {
+                            // Restore original track
+                            sender.replaceTrack(peer.originalTrack);
+                            peer.originalTrack = null;
+                        }
                     }
                 });
             }

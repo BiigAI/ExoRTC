@@ -959,8 +959,16 @@ function updateServerListUI() {
     const serverList = document.getElementById('server-list');
     serverList.innerHTML = servers.map(s => `
         <div class="server-item ${currentServer?.id === s.id ? 'active' : ''}" data-server-id="${s.id}">
-            <div class="server-item-name">${s.name}</div>
-            <div class="server-item-code">Code: ${s.invite_code}</div>
+            <div style="flex: 1; min-width: 0;">
+                <div class="server-item-name">${s.name}</div>
+                <div class="server-item-code">Code: ${s.invite_code}</div>
+            </div>
+            <button class="copy-code-btn" data-code="${s.invite_code}" title="Copy invite code" onclick="event.stopPropagation(); copyServerCode('${s.invite_code}')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
         </div>
     `).join('');
 
@@ -971,6 +979,38 @@ function updateServerListUI() {
         });
     });
 }
+
+function copyServerCode(code) {
+    navigator.clipboard.writeText(code).then(() => {
+        // Find the code element for this server and show feedback
+        const serverItems = document.querySelectorAll('.server-item');
+        serverItems.forEach(item => {
+            const codeEl = item.querySelector('.server-item-code');
+            if (codeEl && codeEl.textContent.includes(code)) {
+                const originalText = codeEl.textContent;
+                codeEl.style.transition = 'opacity 0.2s';
+                codeEl.style.opacity = '0';
+                setTimeout(() => {
+                    codeEl.textContent = 'Copied!';
+                    codeEl.style.color = 'white';
+                    codeEl.style.opacity = '1';
+                }, 200);
+                setTimeout(() => {
+                    codeEl.style.opacity = '0';
+                }, 1200);
+                setTimeout(() => {
+                    codeEl.textContent = originalText;
+                    codeEl.style.color = '';
+                    codeEl.style.opacity = '1';
+                }, 1400);
+            }
+        });
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+
+window.copyServerCode = copyServerCode;
 
 function updateRoomListUI() {
     const roomList = document.getElementById('room-list');
@@ -1151,8 +1191,8 @@ let capturingKey = null;
 
 function openSettings() {
     // Load current settings into inputs
-    document.getElementById('ptt-key-input').value = settings.pttKeyDisplay;
-    document.getElementById('shout-key-input').value = settings.shoutKeyDisplay;
+    document.getElementById('ptt-key-input').textContent = settings.pttKeyDisplay;
+    document.getElementById('shout-key-input').textContent = settings.shoutKeyDisplay;
     document.getElementById('noise-gate-slider').value = settings.noiseGateThreshold;
     document.getElementById('noise-threshold-value').textContent = settings.noiseGateThreshold;
     document.getElementById('ai-noise-cancel-check').checked = settings.aiNoiseCancel;
@@ -1199,7 +1239,7 @@ function openSettings() {
 function startKeyCapture(type) {
     capturingKey = type;
     const inputId = type === 'ptt' ? 'ptt-key-input' : 'shout-key-input';
-    document.getElementById(inputId).value = 'Press a key...';
+    document.getElementById(inputId).textContent = 'Press a key...';
     document.getElementById(inputId).style.borderColor = 'var(--accent)';
 }
 
@@ -1210,7 +1250,7 @@ function handleKeyCapture(e) {
     const keyDisplay = e.key.length === 1 ? e.key.toUpperCase() : e.code.replace('Key', '');
     const inputId = capturingKey === 'ptt' ? 'ptt-key-input' : 'shout-key-input';
 
-    document.getElementById(inputId).value = keyDisplay;
+    document.getElementById(inputId).textContent = keyDisplay;
     document.getElementById(inputId).style.borderColor = '';
 
     // Temporarily store until save

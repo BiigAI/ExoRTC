@@ -88,6 +88,7 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+    margin-top: 20px;
 }
 
 .brand-header span {
@@ -793,6 +794,7 @@ body {
 
 .custom-range {
     -webkit-appearance: none;
+    appearance: none;
     width: 100%;
     height: 6px;
     background: #333;
@@ -827,4 +829,37 @@ body {
 /* Hidden elements */
 .hidden {
     display: none !important;
+}
+
+/* Brand Logo */
+.brand-logo {
+    height: 24px;
+    width: 24px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* Dynamic User Avatar */
+.avatar-svg {
+    width: 100%;
+    height: 100%;
+    animation: spin 10s linear infinite;
+}
+
+.avatar-text {
+    font-family: monospace;
+    font-weight: bold;
+    fill: white;
+    font-size: 14px;
+    letter-spacing: 2px;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }

@@ -31,6 +31,43 @@ let audioAnalyser = null;
 let audioDataArray = null;
 let micLevelInterval = null;
 
+// Sound Effects
+const audioCache = {};
+function playSound(filename) {
+    const path = `./assets/sounds/${filename}`;
+    if (!audioCache[filename]) {
+        audioCache[filename] = new Audio(path);
+    } else {
+        audioCache[filename].currentTime = 0;
+    }
+    audioCache[filename].volume = 0.1; // Force distinct volume reduction on every play
+    audioCache[filename].play().catch(e => console.warn('Audio play failed:', e));
+}
+
+function generateAvatarSVG(username, color, showInitial = true) {
+    // Repeat username to fill the circle roughly
+    const textRequest = username + " • ";
+    const repeated = textRequest.repeat(3); // Adjust based on length? 
+    // Simply repeating a few times is usually safe for this effect
+
+    // Unique ID for text path
+    const id = 'curve-' + Math.random().toString(36).substr(2, 9);
+
+    return `
+    <svg viewBox="0 0 100 100" class="avatar-svg" style="background: ${color}; border-radius: 50%;">
+        <defs>
+            <path id="${id}" d="M 50, 50 m -35, 0 a 35,35 0 1,1 70,0 a 35,35 0 1,1 -70,0" />
+        </defs>
+        <text class="avatar-text" font-size="12">
+            <textPath href="#${id}" startOffset="0%">
+                ${repeated}
+            </textPath>
+        </text>
+        ${showInitial ? `<text x="50" y="58" text-anchor="middle" fill="white" font-size="24" font-weight="bold" style="text-shadow: 0 2px 4px rgba(0,0,0,0.5)">${username[0].toUpperCase()}</text>` : ''}
+    </svg>
+    `;
+}
+
 const api = {
     token: null,
 
@@ -488,6 +525,7 @@ function setupSocketHandlers() {
     socketManager.on('room-joined', async (data) => {
         roomMembers = data.members;
         updateRoomMembersUI();
+        playSound('join.ogg');
         for (const member of data.members) {
             await audioEngine.createPeerConnection(member.user_id, member.username, true);
         }
@@ -496,12 +534,14 @@ function setupSocketHandlers() {
     socketManager.on('user-joined', async (data) => {
         roomMembers.push({ user_id: data.userId, username: data.username });
         updateRoomMembersUI();
+        playSound('join.ogg');
     });
 
     socketManager.on('user-left', (data) => {
         roomMembers = roomMembers.filter(m => m.user_id !== data.userId);
         audioEngine.closePeerConnection(data.userId);
         updateRoomMembersUI();
+        playSound('leave.ogg');
     });
 
     socketManager.on('room-left', () => {
@@ -509,6 +549,7 @@ function setupSocketHandlers() {
         roomMembers = [];
         audioEngine.closeAllConnections();
         showNoRoomView();
+        playSound('leave.ogg');
     });
 
     socketManager.on('offer', async (data) => {
@@ -779,13 +820,18 @@ function updateRoomMembersUI() {
     const roomMembersEl = document.getElementById('room-members');
     const allMembers = [{ user_id: currentUser.id, username: currentUser.username }, ...roomMembers];
 
-    roomMembersEl.innerHTML = allMembers.map(m => `
+    roomMembersEl.innerHTML = allMembers.map(m => {
+        const color = m.user_id === currentUser.id ? (currentUser.profile_color || 'var(--accent)') : (m.profile_color || 'var(--accent)');
+        const avatarSvg = generateAvatarSVG(m.username, color);
+
+        return `
         <div class="member-card" data-user-id="${m.user_id}">
-            <div class="member-avatar" style="background: ${m.user_id === currentUser.id ? (currentUser.profile_color || 'var(--accent)') : (m.profile_color || 'var(--accent)')}">${m.username[0].toUpperCase()}</div>
+            <div class="member-avatar" style="background: none; overflow: hidden; padding: 0;">${avatarSvg}</div>
             <div class="member-name">${m.username}${m.user_id === currentUser.id ? ' (You)' : ''}</div>
             <div class="member-status">In channel</div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function updateShoutButton() {

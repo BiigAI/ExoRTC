@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS servers (
 CREATE TABLE IF NOT EXISTS server_members (
     user_id TEXT NOT NULL,
     server_id TEXT NOT NULL,
-    role TEXT DEFAULT 'member' CHECK(role IN ('owner', 'admin', 'member')),
+    role TEXT DEFAULT 'member' CHECK(role IN ('owner', 'admin', 'pmc_member', 'squad_leader', 'member')),
     joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, server_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,

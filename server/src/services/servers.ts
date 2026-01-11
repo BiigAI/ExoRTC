@@ -13,8 +13,23 @@ export interface Server {
 export interface ServerMember {
     user_id: string;
     server_id: string;
-    role: 'owner' | 'admin' | 'member';
+    role: 'owner' | 'admin' | 'pmc_member' | 'squad_leader' | 'member';
     joined_at: string;
+}
+
+// Role-based permission helpers
+export type ServerRole = 'owner' | 'admin' | 'pmc_member' | 'squad_leader' | 'member';
+
+export function canManageMembers(role: string | null): boolean {
+    return role === 'owner' || role === 'admin';
+}
+
+export function canCreateChannels(role: string | null): boolean {
+    return role === 'owner' || role === 'admin' || role === 'pmc_member';
+}
+
+export function canShout(role: string | null): boolean {
+    return role === 'owner' || role === 'admin' || role === 'pmc_member' || role === 'squad_leader';
 }
 
 function generateInviteCode(): string {
@@ -94,7 +109,9 @@ export function isServerAdmin(userId: string, serverId: string): boolean {
     return role === 'owner' || role === 'admin';
 }
 
-export function updateMemberRole(userId: string, serverId: string, newRole: 'admin' | 'member'): boolean {
+export function updateMemberRole(userId: string, serverId: string, newRole: ServerRole): boolean {
+    // Can't change owner role
+    if (newRole === 'owner') return false;
     const result = db.run('UPDATE server_members SET role = ? WHERE user_id = ? AND server_id = ? AND role != ?', [newRole, userId, serverId, 'owner']);
     return result.changes > 0;
 }

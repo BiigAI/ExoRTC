@@ -513,12 +513,44 @@ const audioEngine = {
 let currentUser = null;
 let currentServer = null;
 let currentRoom = null;
+let currentUserRole = null; // User's role in current server
 let servers = [];
 let rooms = [];
 let roomMembers = [];
 let canShout = false;
 let isPttActive = false;
 let isShoutActive = false;
+
+// Role-based permission helpers (same logic as server)
+function canManageMembers(role) {
+    return role === 'owner' || role === 'admin';
+}
+
+function canCreateChannels(role) {
+    return role === 'owner' || role === 'admin' || role === 'pmc_member';
+}
+
+function canShoutRole(role) {
+    return role === 'owner' || role === 'admin' || role === 'pmc_member' || role === 'squad_leader';
+}
+
+function updateRoleBasedUI() {
+    // Show/hide manage members button
+    const manageBtn = document.getElementById('manage-members-btn');
+    if (manageBtn) {
+        manageBtn.style.display = canManageMembers(currentUserRole) ? '' : 'none';
+    }
+
+    // Show/hide create room button
+    const createRoomBtn = document.getElementById('create-room-btn');
+    if (createRoomBtn) {
+        createRoomBtn.style.display = canCreateChannels(currentUserRole) ? '' : 'none';
+    }
+
+    // Update shout based on role
+    canShout = canShoutRole(currentUserRole);
+    updateShoutButton();
+}
 
 // Initialize app
 async function init() {
@@ -762,12 +794,13 @@ async function selectServer(server) {
 
     const serverDetails = await api.getServer(server.id);
     if (serverDetails.data) {
-        canShout = serverDetails.data.shoutUsers.some(u => u.user_id === currentUser.id);
-        updateShoutButton();
+        // Get user's role in this server
+        const member = serverDetails.data.members.find(m => m.user_id === currentUser.id);
+        currentUserRole = member?.role || 'member';
+        updateRoleBasedUI();
     }
 
     await loadRooms(server.id);
-    // document.getElementById('room-section').style.display = 'block'; // Always visible now
     updateServerListUI();
 }
 
@@ -1125,7 +1158,10 @@ async function showMembers() {
 
     const membersList = document.getElementById('members-list');
     membersList.innerHTML = serverMembers.map(m => {
-        const hasShout = shoutUsers.some(s => s.user_id === m.user_id);
+        const isOwner = m.role === 'owner';
+        const isSelf = m.user_id === currentUser.id;
+        const canEdit = canManageMembers(currentUserRole) && !isOwner && !isSelf;
+
         return `
             <div class="setting-row" style="cursor: default; padding: 10px 16px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
@@ -1133,16 +1169,19 @@ async function showMembers() {
                     <div>
                         <div style="font-weight: 600; font-size: 14px;">${m.username}</div>
                         <div style="font-size: 11px; color: var(--text-muted); font-weight: 500;">
-                            ${m.role.toUpperCase()}
-                            ${hasShout ? '<span style="color: var(--warning); margin-left: 6px;">SHOUT ENABLED</span>' : ''}
+                            ${m.role.toUpperCase().replace('_', ' ')}
                         </div>
                     </div>
                 </div>
-                <button class="btn ${hasShout ? 'btn-secondary' : 'btn-primary'}" 
-                    style="font-size: 11px; padding: 6px 12px; width: auto;"
-                    onclick="toggleShout('${m.user_id}', ${hasShout})">
-                    ${hasShout ? 'Revoke' : 'Permit'}
-                </button>
+                ${canEdit ? `
+                    <select onchange="changeRole('${m.user_id}', this.value)" 
+                        style="background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; font-size: 11px;">
+                        <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        <option value="pmc_member" ${m.role === 'pmc_member' ? 'selected' : ''}>PMC Member</option>
+                        <option value="squad_leader" ${m.role === 'squad_leader' ? 'selected' : ''}>Squad Leader</option>
+                        <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
+                    </select>
+                ` : ''}
             </div>
         `;
     }).join('');
@@ -1168,6 +1207,26 @@ async function toggleShout(userId, hasShout) {
         updateShoutButton();
     }
 }
+
+async function changeRole(userId, newRole) {
+    if (!currentServer) return;
+
+    const result = await api.request('POST', `/servers/${currentServer.id}/role`, {
+        user_id: userId,
+        role: newRole
+    });
+
+    if (result.error) {
+        console.error('Failed to change role:', result.error);
+        return;
+    }
+
+    // Refresh the members list
+    await showMembers();
+}
+
+// Make changeRole available globally for inline onclick
+window.changeRole = changeRole;
 
 // Event listeners
 document.getElementById('login-form').addEventListener('submit', async (e) => {

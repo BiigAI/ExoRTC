@@ -7,7 +7,7 @@ import {
     deleteRoom,
     getRoomsWithMembers
 } from '../services/rooms';
-import { isServerAdmin, getServerById } from '../services/servers';
+import { isServerAdmin, getServerById, canCreateChannels, getUserRole } from '../services/servers';
 
 const router = Router();
 
@@ -34,13 +34,14 @@ router.get('/servers/:serverId/rooms', (req: AuthenticatedRequest, res: Response
     res.json({ rooms });
 });
 
-// POST /api/servers/:serverId/rooms - Create a room (admin only)
+// POST /api/servers/:serverId/rooms - Create a room (pmc_member, admin, owner)
 router.post('/servers/:serverId/rooms', (req: AuthenticatedRequest, res: Response) => {
     const { serverId } = req.params;
     const { name, voice_mode } = req.body;
 
-    if (!isServerAdmin(req.user!.id, serverId)) {
-        res.status(403).json({ error: 'Admin permission required' });
+    const userRole = getUserRole(req.user!.id, serverId);
+    if (!canCreateChannels(userRole)) {
+        res.status(403).json({ error: 'Permission denied: cannot create channels' });
         return;
     }
 

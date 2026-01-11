@@ -7,7 +7,10 @@ import {
     joinServer,
     getServerMembers,
     isServerAdmin,
-    updateMemberRole
+    updateMemberRole,
+    canManageMembers,
+    getUserRole,
+    ServerRole
 } from '../services/servers';
 import { grantShoutPermission, revokeShoutPermission, getShoutUsers } from '../services/permissions';
 
@@ -81,17 +84,19 @@ router.get('/:id/members', (req: AuthenticatedRequest, res: Response) => {
     res.json({ members });
 });
 
-// POST /api/servers/:id/role - Update member role (admin only)
+// POST /api/servers/:id/role - Update member role (admin/owner only)
 router.post('/:id/role', (req: AuthenticatedRequest, res: Response) => {
     const { user_id, role } = req.body;
 
-    if (!isServerAdmin(req.user!.id, req.params.id)) {
-        res.status(403).json({ error: 'Admin permission required' });
+    const requesterRole = getUserRole(req.user!.id, req.params.id);
+    if (!canManageMembers(requesterRole)) {
+        res.status(403).json({ error: 'Permission denied: cannot manage members' });
         return;
     }
 
-    if (!user_id || !['admin', 'member'].includes(role)) {
-        res.status(400).json({ error: 'Valid user_id and role (admin/member) required' });
+    const validRoles: ServerRole[] = ['admin', 'pmc_member', 'squad_leader', 'member'];
+    if (!user_id || !validRoles.includes(role)) {
+        res.status(400).json({ error: 'Valid user_id and role required' });
         return;
     }
 

@@ -246,7 +246,7 @@ const audioEngine = {
                 video: false
             });
 
-            this.audioContext = new AudioContext();
+            this.audioContext = new AudioContext({ sampleRate: 48000 });
             const source = this.audioContext.createMediaStreamSource(rawStream);
             const destination = this.audioContext.createMediaStreamDestination();
 

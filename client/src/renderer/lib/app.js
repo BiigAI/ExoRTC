@@ -1057,24 +1057,32 @@ function setupSocketHandlers() {
     });
 
     socketManager.on('you-are-kicked', (data) => {
-        // Check if we are currently kicked from the active server
-        if (currentServer && currentServer.id === data.serverId) {
-            currentServer = null;
-            document.getElementById('room-list').innerHTML = ''; // Strictly clear channels
-            document.querySelector('.sidebar-header h2').textContent = 'Select Server';
-            showNoRoomView();
-        }
+        try {
+            // Check if we are currently kicked from the active server
+            if (currentServer && currentServer.id === data.serverId) {
+                currentServer = null;
+                document.getElementById('room-list').innerHTML = '';
+                document.querySelector('.sidebar-header h2').textContent = 'Select Server';
+                showNoRoomView();
+            }
 
-        // Immediately leave the room to stop audio and update UI
-        leaveCurrentRoom();
+            // Always attempt to leave active room
+            leaveCurrentRoom();
 
-        // Refresh server list to show "Kicked" status immediately
-        loadServers();
+            // Refresh to update UI
+            loadServers();
 
-        // Show notification after a brief delay to ensure UI has updated
-        setTimeout(() => {
+            // Notify user
+            setTimeout(() => {
+                alert(`You have been kicked from the server.\nReason: ${data.reason || 'None'}\nDuration: ${data.duration} minutes`);
+            }, 50);
+
+        } catch (err) {
+            console.error('Error handling kick:', err);
+            // Fallback: Ensure user knows they are kicked even if UI fails
             alert(`You have been kicked from the server.\nReason: ${data.reason || 'None'}\nDuration: ${data.duration} minutes`);
-        }, 100);
+            window.location.reload(); // Force reload to clear state
+        }
     });
 
     socketManager.on('error', (data) => {

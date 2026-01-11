@@ -239,6 +239,16 @@
                         <span>Push to Talk</span>
                         <kbd id="ptt-key">V</kbd>
                     </button>
+                    <button class="ptt-button deafen" id="deafen-btn" title="Deafen (mute all incoming audio)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 18v-6a9 9 0 0 1 18 0v6"></path>
+                            <path
+                                d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z">
+                            </path>
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                        </svg>
+                    </button>
                     <button class="ptt-button shout" id="shout-btn">
                         <span>Shout</span>
                         <kbd id="shout-key">B</kbd>
@@ -384,6 +394,26 @@
                                     onclick="startKeyCapture('shout')">Edit</button>
                             </div>
                         </div>
+                        <div class="setting-row">
+                            <span class="setting-label">Sound Effects</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="sound-effects-check" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Master Volume Section -->
+                <div class="settings-section">
+                    <div class="settings-section-header">Audio</div>
+                    <div class="setting-card">
+                        <div class="range-label-row">
+                            <span>Master Volume</span>
+                            <span id="master-volume-value">100%</span>
+                        </div>
+                        <input type="range" id="master-volume-slider" min="0" max="200" value="100"
+                            class="custom-range">
                     </div>
                 </div>
 
@@ -469,6 +499,15 @@
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="lib/app.js"></script>
+
+    <!-- Reconnect Overlay -->
+    <div id="reconnect-overlay" class="reconnect-overlay hidden">
+        <div class="reconnect-content">
+            <div class="reconnect-spinner"></div>
+            <div class="reconnect-text">Reconnecting...</div>
+            <div class="reconnect-attempts">Attempt 1 of 5</div>
+        </div>
+    </div>
 </body>
 
 </html>

@@ -70,3 +70,30 @@ CREATE INDEX IF NOT EXISTS idx_server_members_user ON server_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_rooms_server ON rooms(server_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_room ON room_members(room_id);
 CREATE INDEX IF NOT EXISTS idx_shout_permissions_server ON shout_permissions(server_id);
+
+-- Server Mutes
+CREATE TABLE IF NOT EXISTS server_mutes (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    muted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    muted_by TEXT NOT NULL,
+    reason TEXT,
+    FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (muted_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Server Kicks
+CREATE TABLE IF NOT EXISTS server_kicks (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    kicked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    kicked_by TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    reason TEXT,
+    FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (kicked_by) REFERENCES users(id) ON DELETE SET NULL
+);

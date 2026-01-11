@@ -3,11 +3,14 @@ import { verifyToken } from './auth';
 import { joinRoom, leaveRoom, getRoomMembers, getRoomById, getUserCurrentRoom } from './rooms';
 import { hasShoutPermission, getActiveShoutUsers, canShoutByRole, getActiveShoutListeners } from './permissions';
 import { getUserById } from './auth';
+import { muteUser, unmuteUser, kickUser, isUserMuted, isUserKicked, getActiveKick } from './moderation';
+import { getUserRole, canManageMembers } from './servers';
 
 interface AuthenticatedSocket extends Socket {
     userId?: string;
     username?: string;
     currentRoomId?: string;
+    latency?: number;
 }
 
 interface SignalingData {
@@ -61,16 +64,29 @@ export function initializeSignaling(io: SocketServer): void {
                 return;
             }
 
+            // JOIN CHECK: Is user kicked?
+            if (isUserKicked(room.server_id, socket.userId)) {
+                const kick = getActiveKick(room.server_id, socket.userId);
+                const expires = new Date(kick!.expires_at).toLocaleTimeString();
+                socket.emit('error', { message: `You are kicked until ${expires}` });
+                return;
+            }
+
             // Leave current room if any
             if (socket.currentRoomId) {
+                const oldRoom = getRoomById(socket.currentRoomId);
                 leaveRoom(socket.userId);
                 socket.leave(socket.currentRoomId);
+
                 io.to(socket.currentRoomId).emit('user-left', {
                     userId: socket.userId,
                     username: socket.username
                 });
-                // Broadcast updated room counts to server
-                io.to(`server:${room.server_id}`).emit('rooms-updated');
+
+                // Update old server if different
+                if (oldRoom && oldRoom.server_id !== room.server_id) {
+                    io.to(`server:${oldRoom.server_id}`).emit('rooms-updated');
+                }
             }
 
             // Join new room
@@ -80,17 +96,34 @@ export function initializeSignaling(io: SocketServer): void {
 
             // Get current room members
             const members = getRoomMembers(roomId);
+            const isMeMuted = isUserMuted(room.server_id, socket.userId);
 
             // Notify room of new user
             socket.to(roomId).emit('user-joined', {
                 userId: socket.userId,
-                username: socket.username
+                username: socket.username,
+                ping: socket.latency || 0,
+                isServerMuted: isMeMuted
             });
 
+            if (isMeMuted) {
+                socket.emit('you-are-muted', { serverId: room.server_id });
+            }
+
             // Send current members to the joining user
+            const membersWithPing = members.map(m => {
+                const s = findSocketByUserId(io, m.user_id);
+                const isMuted = isUserMuted(room.server_id, m.user_id);
+                return {
+                    ...m,
+                    ping: s?.latency || 0,
+                    isServerMuted: isMuted
+                };
+            });
+
             socket.emit('room-joined', {
                 roomId,
-                members: members.filter(m => m.user_id !== socket.userId)
+                members: membersWithPing.filter(m => m.user_id !== socket.userId)
             });
 
             // Broadcast updated room counts to server
@@ -219,9 +252,72 @@ export function initializeSignaling(io: SocketServer): void {
             });
         });
 
+        // Moderation
+        socket.on('mute-user', (data: { serverId: string, userId: string }) => {
+            const myRole = getUserRole(socket.userId!, data.serverId);
+            if (!canManageMembers(myRole)) return;
+
+            muteUser(data.serverId, data.userId, socket.userId!);
+
+            // Notification
+            io.to(`server:${data.serverId}`).emit('user-muted', { serverId: data.serverId, userId: data.userId });
+
+            const targetSocket = findSocketByUserId(io, data.userId);
+            if (targetSocket) {
+                targetSocket.emit('you-are-muted', { serverId: data.serverId });
+            }
+        });
+
+        socket.on('unmute-user', (data: { serverId: string, userId: string }) => {
+            const myRole = getUserRole(socket.userId!, data.serverId);
+            if (!canManageMembers(myRole)) return;
+
+            unmuteUser(data.serverId, data.userId);
+
+            io.to(`server:${data.serverId}`).emit('user-unmuted', { serverId: data.serverId, userId: data.userId });
+
+            const targetSocket = findSocketByUserId(io, data.userId);
+            if (targetSocket) {
+                targetSocket.emit('you-are-unmuted', { serverId: data.serverId });
+            }
+        });
+
+        socket.on('kick-user', (data: { serverId: string, userId: string, duration: number, reason?: string }) => {
+            const myRole = getUserRole(socket.userId!, data.serverId);
+            if (!canManageMembers(myRole)) return;
+
+            kickUser(data.serverId, data.userId, socket.userId!, data.duration, data.reason);
+
+            io.to(`server:${data.serverId}`).emit('user-kicked', { serverId: data.serverId, userId: data.userId });
+
+            const targetSocket = findSocketByUserId(io, data.userId);
+            if (targetSocket) {
+                targetSocket.emit('you-are-kicked', { serverId: data.serverId, duration: data.duration, reason: data.reason });
+                if (targetSocket.currentRoomId) {
+                    const room = getRoomById(targetSocket.currentRoomId);
+                    if (room && room.server_id === data.serverId) {
+                        leaveRoom(data.userId); // DB
+                        targetSocket.leave(targetSocket.currentRoomId); // Socket
+                        io.to(targetSocket.currentRoomId).emit('user-left', { userId: data.userId, username: targetSocket.username });
+                        targetSocket.currentRoomId = undefined;
+                    }
+                }
+            }
+        });
+
         // Ping/Pong for latency measurement
         socket.on('ping', (timestamp: number) => {
+            const latency = Date.now() - timestamp;
+            socket.latency = latency;
             socket.emit('pong', timestamp);
+
+            // Broadcast ping to room
+            if (socket.currentRoomId) {
+                socket.to(socket.currentRoomId).emit('user-ping', {
+                    userId: socket.userId,
+                    ping: latency
+                });
+            }
         });
 
         // Handle disconnect

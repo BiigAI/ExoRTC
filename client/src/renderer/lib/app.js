@@ -13,7 +13,9 @@ const defaultSettings = {
     shoutKeyDisplay: 'B',
     noiseGateThreshold: 30,
     aiNoiseCancel: true,
-    aiAggressiveness: 50
+    aiAggressiveness: 50,
+    soundEffectsEnabled: true,
+    masterVolume: 100
 };
 
 let settings = { ...defaultSettings };
@@ -100,9 +102,15 @@ const memberVolumeSettings = {
             const baseVolume = this.getEffectiveVolume(userId);
             // Apply ducking if active
             const duckingMultiplier = audioEngine.isDucking ? 0.5 : 1.0;
-            audio.volume = Math.min(1, baseVolume * duckingMultiplier);
-            // Note: HTML5 audio maxes at 1.0, for >100% we'd need Web Audio API gain
-            // For simplicity, we cap at 1.0 but the slider goes to 200% as visual feedback
+            const masterMultiplier = settings.masterVolume / 100;
+            const deafenMultiplier = isDeafened ? 0 : 1;
+
+            // Server Mute check
+            const member = roomMembers.find(m => m.user_id === userId);
+            const serverMuteMultiplier = (member && member.isServerMuted) ? 0 : 1;
+
+            audio.volume = Math.min(1, baseVolume * duckingMultiplier * masterMultiplier * deafenMultiplier * serverMuteMultiplier);
+            // Note: HTML5 audio maxes at 1.0
         }
     },
 
@@ -125,6 +133,7 @@ let micLevelInterval = null;
 // Sound Effects
 const audioCache = {};
 function playSound(filename) {
+    if (!settings.soundEffectsEnabled) return;
     const path = `./assets/sounds/${filename}`;
     if (!audioCache[filename]) {
         audioCache[filename] = new Audio(path);
@@ -279,44 +288,150 @@ const socketManager = {
     pingHistory: [],
     maxPingHistory: 5,
 
-    async connect(token) {
-        return new Promise((resolve) => {
-            if (typeof io === 'undefined') {
-                console.error('Socket.IO not loaded');
-                resolve(false);
-                return;
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 5,
+    isReconnecting: false,
+    reconnectTimer: null,
+
+    connect() {
+        if (this.socket && this.socket.connected) return; // Already connected
+
+        // Use configured URL or default
+        console.log('Connecting to:', SERVER_URL);
+
+        const token = api.getToken(); // Get stored token
+
+        // IMPORTANT: In a real app, you would valide the token or refresh it
+        // For this demo, we assume the token is valid if present
+
+        this.socket = io(SERVER_URL, {
+            auth: { token },
+            transports: ['websocket', 'polling'], // Allow polling fallback
+            reconnection: false // We handle reconnection manually for UI control
+        });
+
+        this.socket.on('connect', () => {
+            console.log('Connected to server, ID:', this.socket.id);
+            this.reconnectAttempts = 0;
+            this.isReconnecting = false;
+            document.getElementById('reconnect-overlay').classList.add('hidden');
+
+            // Re-subscribe to current server if any
+            if (currentServer) {
+                this.socket.emit('subscribe-server', currentServer.id);
             }
 
-            this.socket = io(SERVER_URL, {
-                auth: { token },
-                transports: ['websocket']
-            });
+            // Re-join room if we were in one
+            if (currentRoom && currentRoom.id) {
+                this.joinRoom(currentRoom.id);
+            }
 
-            this.socket.on('connect', () => {
-                console.log('Socket connected');
-                resolve(true);
-            });
+            updateConnectionStatus(true);
+            document.getElementById('connection-status').classList.remove('disconnected');
+            document.getElementById('connection-text').textContent = 'Connected';
 
-            this.socket.on('connect_error', (error) => {
-                console.error('Socket connection error:', error.message);
-                resolve(false);
-            });
-
-            // Handle pong responses for ping measurement
-            this.socket.on('pong', (timestamp) => {
-                const latency = Date.now() - timestamp;
-                this.currentPing = latency;
-
-                // Keep last N pings for averaging
-                this.pingHistory.push(latency);
-                if (this.pingHistory.length > this.maxPingHistory) {
-                    this.pingHistory.shift();
-                }
-
-                // Update UI
-                this.updatePingDisplay();
-            });
+            this.setupSocketListeners();
+            this.startPingInterval();
         });
+
+        this.socket.on('disconnect', (reason) => {
+            console.log('Disconnected:', reason);
+            updateConnectionStatus(false);
+            document.getElementById('connection-status').classList.add('disconnected');
+            document.getElementById('connection-text').textContent = 'Disconnected';
+            this.stopPingInterval();
+
+            // Attempt to reconnect if not manually disconnected
+            if (reason !== 'io client disconnect') {
+                this.handleDisconnect();
+            }
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            // If authentication error, redirect to login
+            if (error.message.includes('Authentication') || error.message.includes('token')) {
+                // This should ideally be handled by the server sending a specific error code
+                // For now, assume if token is invalid, it's an auth issue.
+                // This might be too aggressive, consider a more robust auth flow.
+                api.setToken(null); // Clear invalid token
+                showAuth(); // Go back to auth page
+            } else {
+                // For other errors (network), triggering reconnect logic via disconnect listener usually
+                // But connect_error might fire without connect/disconnect cycle
+                if (!this.isReconnecting) {
+                    this.handleDisconnect();
+                }
+            }
+        });
+    },
+
+    handleDisconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            const overlay = document.getElementById('reconnect-overlay');
+            overlay.classList.remove('hidden');
+            overlay.querySelector('.reconnect-text').textContent = "Connection Lost";
+            overlay.querySelector('.reconnect-attempts').innerHTML = `
+                Unable to reconnect.<br>
+                <button class="btn btn-primary" onclick="window.location.reload()" style="margin-top:10px;">Reload App</button>
+            `;
+            overlay.querySelector('.reconnect-spinner').style.display = 'none';
+            return;
+        }
+
+        this.isReconnecting = true;
+        document.getElementById('reconnect-overlay').classList.remove('hidden');
+
+        // Exponential backoff
+        const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 10000);
+
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectAttempts++;
+            document.querySelector('.reconnect-attempts').textContent = `Attempt ${this.reconnectAttempts} of ${this.maxReconnectAttempts}`;
+
+            console.log(`Attempting reconnect ${this.reconnectAttempts}...`);
+            this.socket.connect(); // Attempt to reconnect
+        }, delay);
+    },
+
+    setupSocketListeners() {
+        // Clear existing listeners to prevent duplicates on reconnect
+        this.eventHandlers.forEach((callback, event) => {
+            this.socket.off(event, callback);
+        });
+        this.eventHandlers.clear();
+
+        // Re-add all application-specific handlers
+        setupSocketHandlers(); // This function needs to be modified to use socketManager.on
+    },
+
+    startPingInterval() {
+        this.stopPingInterval(); // Clear any existing interval
+        this.socket.on('pong', (timestamp) => {
+            const latency = Date.now() - timestamp;
+            this.currentPing = latency;
+
+            // Keep last N pings for averaging
+            this.pingHistory.push(latency);
+            if (this.pingHistory.length > this.maxPingHistory) {
+                this.pingHistory.shift();
+            }
+
+            // Update UI
+            this.updatePingDisplay();
+        });
+
+        this.pingInterval = setInterval(() => {
+            this.sendPing();
+        }, 2000); // Ping every 2 seconds
+    },
+
+    stopPingInterval() {
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+        this.socket.off('pong'); // Remove pong listener
     },
 
     sendPing() {
@@ -359,12 +474,21 @@ const socketManager = {
         if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
+            this.stopPingInterval();
+            this.eventHandlers.clear();
+            if (this.reconnectTimer) {
+                clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+            }
+            this.isReconnecting = false;
+            document.getElementById('reconnect-overlay').classList.add('hidden');
         }
     },
 
     on(event, callback) {
         if (this.socket) {
             this.socket.on(event, callback);
+            this.eventHandlers.set(event, callback); // Store for re-registration
         }
     },
 
@@ -408,6 +532,50 @@ const socketManager = {
 };
 
 // Audio Engine
+// Deafen State
+// Deafen State
+let isDeafened = false;
+
+function toggleDeafen() {
+    isDeafened = !isDeafened;
+
+    // Update UI
+    const btn = document.getElementById('deafen-btn');
+    if (btn) {
+        btn.classList.toggle('active', isDeafened);
+        btn.title = isDeafened ? 'Undeafen' : 'Deafen (mute all incoming audio)';
+        playSound(isDeafened ? 'leave.ogg' : 'join.ogg');
+    }
+
+    // Apply mute to everyone
+    memberVolumeSettings.applyAllVolumes();
+}
+
+// Global Audio Visualizer Loop
+let currentGlow = 0;
+function updateAudioVisualizer() {
+    // Determine target glow based on speaking activity
+    // (Proxy for remote audio levels)
+    const speakingCount = document.querySelectorAll('.member-card.speaking').length;
+    let targetGlow = speakingCount > 0 ? 0.3 + (Math.min(speakingCount, 5) * 0.1) : 0;
+
+    // Also include local mic if speaking
+    if (audioEngine.isSpeaking) {
+        targetGlow = Math.max(targetGlow, 0.5);
+    }
+
+    // Smooth transition
+    currentGlow += (targetGlow - currentGlow) * 0.1;
+
+    const membersContainer = document.querySelector('.room-members');
+    if (membersContainer) {
+        membersContainer.style.setProperty('--audio-glow', currentGlow.toFixed(3));
+    }
+
+    requestAnimationFrame(updateAudioVisualizer);
+}
+requestAnimationFrame(updateAudioVisualizer);
+
 const audioEngine = {
     localStream: null,
     peers: new Map(),
@@ -715,15 +883,9 @@ function changeServer() {
 async function connectAndShowApp() {
     await audioEngine.initialize();
 
-    const token = api.getToken();
-    const connected = await socketManager.connect(token);
+    socketManager.connect(); // Use the new connect method
+    // The rest of the logic moves into socketManager.on('connect')
 
-    if (!connected) {
-        showError('Failed to connect to server');
-        return;
-    }
-
-    setupSocketHandlers();
     setupHotkeyHandlers();
     await loadServers();
 
@@ -733,27 +895,53 @@ async function connectAndShowApp() {
     document.getElementById('app-page').style.display = 'flex';
     document.getElementById('status-bar').classList.remove('hidden');
 
-    // Start ping measurement
-    socketManager.sendPing(); // Initial ping
-    setInterval(() => {
-        socketManager.sendPing();
-    }, 2000); // Ping every 2 seconds
+    // Start ping measurement is now handled by socketManager.startPingInterval()
+}
+
+function updateConnectionStatus(isConnected) {
+    const statusEl = document.getElementById('connection-status');
+    if (isConnected) {
+        statusEl.classList.remove('disconnected');
+        statusEl.classList.add('connected');
+        statusEl.title = 'Connected';
+    } else {
+        statusEl.classList.remove('connected');
+        statusEl.classList.add('disconnected');
+        statusEl.title = 'Disconnected';
+    }
 }
 
 function setupSocketHandlers() {
     socketManager.on('room-joined', async (data) => {
-        roomMembers = data.members;
+        roomMembers = data.members; // includes ping and isServerMuted
         updateRoomMembersUI();
         playSound('join.ogg');
         for (const member of data.members) {
-            await audioEngine.createPeerConnection(member.user_id, member.username, true);
+            if (member.user_id !== currentUser.id) {
+                await audioEngine.createPeerConnection(member.user_id, member.username, true);
+                // Enforce server mute immediately
+                memberVolumeSettings.applyVolume(member.user_id);
+            }
         }
     });
 
     socketManager.on('user-joined', async (data) => {
-        roomMembers.push({ user_id: data.userId, username: data.username });
+        roomMembers.push({
+            user_id: data.userId,
+            username: data.username,
+            ping: data.ping,
+            isServerMuted: data.isServerMuted
+        });
         updateRoomMembersUI();
         playSound('join.ogg');
+    });
+
+    socketManager.on('user-ping', (data) => {
+        const member = roomMembers.find(m => m.user_id === data.userId);
+        if (member) {
+            member.ping = data.ping;
+            updateMemberPing(data.userId, data.ping);
+        }
     });
 
     socketManager.on('user-left', (data) => {
@@ -831,6 +1019,48 @@ function setupSocketHandlers() {
         for (const target of data.targets) {
             await audioEngine.createPeerConnection(target.userId, target.username, true, 'shout');
         }
+    });
+
+    // Moderation Handlers
+    socketManager.on('user-muted', (data) => {
+        const member = roomMembers.find(m => m.user_id === data.userId);
+        if (member) {
+            member.isServerMuted = true;
+            updateRoomMembersUI();
+            memberVolumeSettings.applyVolume(data.userId);
+        }
+    });
+
+    socketManager.on('user-unmuted', (data) => {
+        const member = roomMembers.find(m => m.user_id === data.userId);
+        if (member) {
+            member.isServerMuted = false;
+            updateRoomMembersUI();
+            memberVolumeSettings.applyVolume(data.userId);
+        }
+    });
+
+    socketManager.on('you-are-muted', () => {
+        // Mute local microphone
+        if (audioEngine.localStream) {
+            audioEngine.localStream.getAudioTracks().forEach(track => track.enabled = false);
+        }
+        audioEngine.isMuted = true; // Force local mute state
+        updateMuteButton();
+        alert('You have been muted by a server administrator.');
+    });
+
+    socketManager.on('you-are-unmuted', () => {
+        // Unmute local microphone (optional, maybe leave it to user to unmute?)
+        // Let's just notify
+        alert('You have been unmuted by a server administrator.');
+    });
+
+    socketManager.on('you-are-kicked', (data) => {
+        alert(`You have been kicked from the server.\nReason: ${data.reason || 'None'}\nDuration: ${data.duration} minutes`);
+        // Disconnection happens via socket closing or 'room-left' from server
+        // But we should ensure we clean up
+        socketManager.leaveRoom();
     });
 
     // Listen for room updates (new rooms, member count changes)
@@ -1046,6 +1276,7 @@ function leaveCurrentRoom() {
         socketManager.leaveRoom();
         currentRoom = null;
         roomMembers = [];
+        audioEngine.closeAllConnections();
         showNoRoomView();
         updateRoomListUI();
     }
@@ -1221,52 +1452,7 @@ window.deleteSelectedRoom = deleteSelectedRoom;
 // Hide context menu on click elsewhere
 document.addEventListener('click', hideRoomContextMenu);
 
-// Member context menu state
-let contextMenuMemberId = null;
-let contextMenuMemberName = null;
-
-function showMemberContextMenu(x, y, userId, username) {
-    const menu = document.getElementById('member-context-menu');
-    contextMenuMemberId = userId;
-    contextMenuMemberName = username;
-
-    // Update UI with current settings
-    const volume = memberVolumeSettings.getVolume(userId);
-    const isMuted = memberVolumeSettings.isMuted(userId);
-    const slider = document.getElementById('member-volume-slider');
-    const percentage = (volume / 200) * 100;
-
-    document.getElementById('member-context-name').textContent = username;
-    slider.value = volume;
-    slider.style.background = `linear-gradient(to right, var(--accent) ${percentage}%, #333 ${percentage}%)`;
-    document.getElementById('member-volume-value').textContent = `${volume}%`;
-    updateMemberMuteButton(isMuted);
-
-    // Position menu
-    const menuWidth = 220;
-    const menuHeight = 180;
-    let posX = x;
-    let posY = y;
-
-    // Keep menu within viewport
-    if (x + menuWidth > window.innerWidth) {
-        posX = window.innerWidth - menuWidth - 10;
-    }
-    if (y + menuHeight > window.innerHeight) {
-        posY = window.innerHeight - menuHeight - 10;
-    }
-
-    menu.style.left = `${posX}px`;
-    menu.style.top = `${posY}px`;
-    menu.classList.remove('hidden');
-}
-
-function hideMemberContextMenu() {
-    const menu = document.getElementById('member-context-menu');
-    menu.classList.add('hidden');
-    contextMenuMemberId = null;
-    contextMenuMemberName = null;
-}
+// Member context menu state handled below (duplicate removed)
 
 function updateMemberMuteButton(isMuted) {
     const muteBtn = document.getElementById('member-mute-toggle');
@@ -1325,6 +1511,77 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Context menu state
+let contextMenuMemberId = null;
+
+function showMemberContextMenu(x, y, userId, username) {
+    const menu = document.getElementById('member-context-menu');
+    const body = menu.querySelector('.member-context-body');
+    contextMenuMemberId = userId;
+
+    // Reset UI for volume
+    const vol = memberVolumeSettings.getVolume(userId);
+    document.getElementById('member-volume-slider').value = vol;
+    document.getElementById('member-volume-value').textContent = `${vol}%`;
+    const percentage = (vol / 200) * 100;
+    document.getElementById('member-volume-slider').style.background = `linear-gradient(to right, var(--accent) ${percentage}%, #333 ${percentage}%)`;
+
+    // Update Name and Mute Button
+    const nameEl = document.getElementById('member-context-name');
+    if (nameEl) nameEl.textContent = username;
+
+    const isMuted = memberVolumeSettings.isMuted(userId);
+    if (typeof updateMemberMuteButton === 'function') {
+        updateMemberMuteButton(isMuted);
+    }
+
+    // Remove dynamic items
+    body.querySelectorAll('.dynamic-item').forEach(e => e.remove());
+
+    // Admin Options
+    if (canManageMembers(currentUserRole)) {
+        const member = roomMembers.find(m => m.user_id === userId);
+        if (member) {
+            const div = document.createElement('div');
+            div.className = 'context-menu-divider dynamic-item';
+            body.appendChild(div);
+
+            // Mute Server
+            const muteItem = document.createElement('div');
+            muteItem.className = 'context-menu-item dynamic-item';
+            muteItem.innerHTML = `<span>${member.isServerMuted ? 'Unmute (Server)' : 'Mute (Server)'}</span>`;
+            muteItem.onclick = () => {
+                const event = member.isServerMuted ? 'unmute-user' : 'mute-user';
+                socketManager.emit(event, { serverId: currentServer.id, userId });
+                hideMemberContextMenu();
+            };
+            body.appendChild(muteItem);
+
+            // Kick
+            const kickItem = document.createElement('div');
+            kickItem.className = 'context-menu-item dynamic-item';
+            kickItem.innerHTML = `<span style="color:var(--danger)">Kick (Temp)</span>`;
+            kickItem.onclick = () => {
+                const duration = prompt('Kick duration (minutes):', '15');
+                if (duration) {
+                    socketManager.emit('kick-user', { serverId: currentServer.id, userId, duration: parseInt(duration) || 15 });
+                }
+                hideMemberContextMenu();
+            };
+            body.appendChild(kickItem);
+        }
+    }
+
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.classList.remove('hidden');
+}
+
+function hideMemberContextMenu() {
+    document.getElementById('member-context-menu').classList.add('hidden');
+    contextMenuMemberId = null;
+}
+
 function updateRoomMembersUI() {
     const roomMembersEl = document.getElementById('room-members');
     const allMembers = [{ user_id: currentUser.id, username: currentUser.username }, ...roomMembers];
@@ -1332,10 +1589,18 @@ function updateRoomMembersUI() {
     roomMembersEl.innerHTML = allMembers.map(m => {
         const color = m.user_id === currentUser.id ? (currentUser.profile_color || 'var(--accent)') : (m.profile_color || 'var(--accent)');
         const avatarSvg = generateAvatarSVG(m.username, color);
-        const isMuted = m.user_id !== currentUser.id && memberVolumeSettings.isMuted(m.user_id);
+
+        const isLocalMuted = m.user_id !== currentUser.id && memberVolumeSettings.isMuted(m.user_id);
+        const isServerMuted = m.isServerMuted;
+
+        const isMuted = isLocalMuted || isServerMuted;
         const mutedClass = isMuted ? ' muted' : '';
+
+        // Use different color/icon for server mute if desired, for now just red
+        const muteFill = isServerMuted ? '#ef4444' : 'rgba(239, 68, 68, 0.9)';
+
         const mutedIcon = isMuted ? `
-            <div class="member-muted-icon" title="Muted">
+            <div class="member-muted-icon" title="${isServerMuted ? 'Server Muted' : 'Muted'}" style="background: ${muteFill}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="1" y1="1" x2="23" y2="23"></line>
                     <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
@@ -1346,12 +1611,29 @@ function updateRoomMembersUI() {
             </div>
         ` : '';
 
+        // Ping display
+        let pingDisplay = '-- ms';
+        let pingValue = 0;
+
+        if (m.user_id === currentUser.id) {
+            pingValue = socketManager.currentPing || 0;
+        } else {
+            pingValue = m.ping || 0;
+        }
+
+        // Don't show ping if 0 or undefined
+        if (pingValue) {
+            pingDisplay = `${Math.round(pingValue)} ms`;
+        }
+
+        const pingClass = getPingClass(pingValue);
+
         return `
         <div class="member-card${mutedClass}" data-user-id="${m.user_id}">
             <div class="member-avatar" style="background: none; overflow: hidden; padding: 0;">${avatarSvg}</div>
             ${mutedIcon}
             <div class="member-name">${m.username}${m.user_id === currentUser.id ? ' (You)' : ''}</div>
-            <div class="member-status">In channel</div>
+            <div class="member-status ${pingClass}">${pingDisplay}</div>
         </div>
         `;
     }).join('');
@@ -1424,6 +1706,14 @@ function openSettings() {
     document.getElementById('noise-gate-slider').value = settings.noiseGateThreshold;
     document.getElementById('noise-threshold-value').textContent = settings.noiseGateThreshold;
     document.getElementById('ai-noise-cancel-check').checked = settings.aiNoiseCancel;
+    document.getElementById('sound-effects-check').checked = settings.soundEffectsEnabled;
+
+    // Master Volume
+    const masterSlider = document.getElementById('master-volume-slider');
+    masterSlider.value = settings.masterVolume;
+    document.getElementById('master-volume-value').textContent = `${settings.masterVolume}%`;
+    const percentage = (settings.masterVolume / 200) * 100;
+    masterSlider.style.background = `linear-gradient(to right, var(--accent) ${percentage}%, #333 ${percentage}%)`;
 
     // AI Tuning UI
     const aiSlider = document.getElementById('ai-aggressiveness-slider');
@@ -1497,8 +1787,14 @@ function saveSettings() {
     settings.noiseGateThreshold = parseInt(document.getElementById('noise-gate-slider').value);
     settings.aiNoiseCancel = document.getElementById('ai-noise-cancel-check').checked;
     settings.aiAggressiveness = parseInt(document.getElementById('ai-aggressiveness-slider').value);
+    settings.soundEffectsEnabled = document.getElementById('sound-effects-check').checked;
+    settings.masterVolume = parseInt(document.getElementById('master-volume-slider').value);
 
+    // Save settings
     localStorage.setItem('exortc_settings', JSON.stringify(settings));
+
+    // Apply settings
+    memberVolumeSettings.applyAllVolumes(); // Apply new master volume
 
     // Update audio engine
     if (audioEngine.rnnoiseNode) {
@@ -1809,6 +2105,39 @@ function toggleAiCardStyle() {
     }
 }
 
+// Ping Helpers
+function getPingClass(ping) {
+    if (!ping) return '';
+    if (ping < 80) return 'ping-green';
+    if (ping < 150) return 'ping-yellow';
+    return 'ping-red';
+}
+
+function updateMemberPing(userId, ping) {
+    const card = document.querySelector(`.member-card[data-user-id="${userId}"]`);
+    if (card) {
+        const statusEl = card.querySelector('.member-status');
+        if (statusEl) {
+            statusEl.textContent = `${Math.round(ping)} ms`;
+            statusEl.className = `member-status ${getPingClass(ping)}`;
+        }
+    }
+}
+
+// Update current user ping UI
+socketManager.updatePingDisplay = function () {
+    // Also update current user card in room
+    if (currentUser) {
+        updateMemberPing(currentUser.id, this.currentPing);
+    }
+
+    // Update status bar
+    const pingEl = document.getElementById('ping-display');
+    if (pingEl) {
+        pingEl.textContent = `Ping: ${Math.round(this.currentPing)}ms`;
+    }
+};
+
 // Update listeners when modal opens (or globally)
 document.addEventListener('DOMContentLoaded', () => {
     const sliders = document.querySelectorAll('.custom-range');
@@ -1819,6 +2148,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiCheck = document.getElementById('ai-noise-cancel-check');
     if (aiCheck) {
         aiCheck.addEventListener('change', toggleAiCardStyle);
+    }
+
+    const deafenBtn = document.getElementById('deafen-btn');
+    if (deafenBtn) {
+        deafenBtn.addEventListener('click', toggleDeafen);
     }
 
     // Mobile Menu Toggle

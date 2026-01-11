@@ -433,6 +433,12 @@ body {
     gap: 16px;
     align-content: flex-start;
     overflow-y: auto;
+    /* Audio Reactive Background */
+    --audio-glow: 0;
+    transition: --audio-glow 0.1s;
+    background: radial-gradient(ellipse at center bottom,
+            rgba(204, 34, 68, calc(var(--audio-glow) * 0.15)) 0%,
+            transparent 70%);
 }
 
 .member-card {
@@ -544,6 +550,22 @@ body {
     cursor: not-allowed;
 }
 
+.ptt-button.deafen {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 12px;
+}
+
+.ptt-button.deafen svg {
+    /* Ensure icon is sized correctly */
+}
+
+.ptt-button.deafen.active {
+    background: var(--danger);
+    color: white;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
 .ptt-button kbd {
     background: rgba(0, 0, 0, 0.3);
     padding: 2px 6px;
@@ -551,20 +573,7 @@ body {
     font-size: 12px;
 }
 
-.device-info {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    color: var(--text-muted);
-    font-size: 13px;
-}
-
-.device-info span {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
+/* Device info removed */
 
 /* Status bar */
 .status-bar {
@@ -1170,4 +1179,76 @@ body {
 .member-muted-icon svg {
     width: 12px;
     height: 12px;
+}
+
+/* Reconnect Overlay */
+.reconnect-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+    transition: opacity 0.3s;
+}
+
+.reconnect-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.reconnect-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 30px;
+    background: #1a1a1a;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.reconnect-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.reconnect-text {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.reconnect-attempts {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Ping Indicators */
+.member-status.ping-green {
+    color: var(--success);
+}
+
+.member-status.ping-yellow {
+    color: var(--warning);
+}
+
+.member-status.ping-red {
+    color: var(--danger);
 }

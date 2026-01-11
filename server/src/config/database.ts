@@ -29,6 +29,18 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8');
     db.run(schema);
 
+    // Migration: Add voice_mode column to rooms if it doesn't exist
+    try {
+        const columns = all<{ name: string }>(`PRAGMA table_info(rooms)`);
+        const hasVoiceMode = columns.some(c => c.name === 'voice_mode');
+        if (!hasVoiceMode) {
+            db.run(`ALTER TABLE rooms ADD COLUMN voice_mode TEXT DEFAULT 'ptt'`);
+            console.log('Migrated: Added voice_mode column to rooms');
+        }
+    } catch (e) {
+        console.warn('Migration check failed:', e);
+    }
+
     // Save database
     saveDatabase();
 

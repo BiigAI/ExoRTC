@@ -25,3 +25,7 @@ npm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Source code
+src.zip
+client/src.zip

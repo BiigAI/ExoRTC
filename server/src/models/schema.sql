@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL,
     name TEXT NOT NULL,
+    voice_mode TEXT DEFAULT 'ptt' CHECK(voice_mode IN ('ptt', 'open')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE
 );

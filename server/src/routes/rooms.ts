@@ -37,7 +37,7 @@ router.get('/servers/:serverId/rooms', (req: AuthenticatedRequest, res: Response
 // POST /api/servers/:serverId/rooms - Create a room (admin only)
 router.post('/servers/:serverId/rooms', (req: AuthenticatedRequest, res: Response) => {
     const { serverId } = req.params;
-    const { name } = req.body;
+    const { name, voice_mode } = req.body;
 
     if (!isServerAdmin(req.user!.id, serverId)) {
         res.status(403).json({ error: 'Admin permission required' });
@@ -49,7 +49,8 @@ router.post('/servers/:serverId/rooms', (req: AuthenticatedRequest, res: Respons
         return;
     }
 
-    const room = createRoom(serverId, name.trim());
+    const voiceMode = voice_mode === 'open' ? 'open' : 'ptt';
+    const room = createRoom(serverId, name.trim(), voiceMode);
 
     // Broadcast to all users subscribed to this server
     if (ioInstance) {

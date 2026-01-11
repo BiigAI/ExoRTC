@@ -111,9 +111,12 @@
                     <div id="user-name" style="font-size: 13px; font-weight: 500;"></div>
                     <div style="font-size: 11px; color: var(--text-muted);">Online</div>
                 </div>
+                <button id="settings-btn"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"
+                    title="Settings">⚙️</button>
                 <button id="logout-btn"
                     style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"
-                    title="Logout">⚙️</button>
+                    title="Logout">🚪</button>
             </div>
         </div>
 
@@ -208,6 +211,15 @@
                     <label for="room-name">Room Name</label>
                     <input type="text" id="room-name" required placeholder="Alpha Squad">
                 </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="room-open-mic" style="width: auto;">
+                    <label for="room-open-mic" style="margin: 0; cursor: pointer;">
+                        🎤 Open Mic (Voice Activated)
+                    </label>
+                </div>
+                <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
+                    Open mic rooms don't require push-to-talk. Noise gate still applies.
+                </p>
                 <button type="submit" class="btn btn-primary">Create</button>
                 <button type="button" class="btn btn-secondary"
                     onclick="closeModal('create-room-modal')">Cancel</button>
@@ -241,6 +253,81 @@
             </div>
             <button type="button" class="btn btn-secondary" style="margin-top: 16px;"
                 onclick="closeModal('members-modal')">Close</button>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal" style="max-width: 450px;">
+            <h2>⚙️ Settings</h2>
+
+            <div style="margin-bottom: 24px;">
+                <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">🎮 Keybinds</h3>
+
+                <div class="form-group">
+                    <label>Push to Talk</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="ptt-key-input" readonly placeholder="Press a key..."
+                            style="flex: 1; cursor: pointer; text-align: center;">
+                        <button type="button" class="btn btn-secondary" style="width: auto; padding: 8px 12px;"
+                            onclick="startKeyCapture('ptt')">Set</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Shout (Broadcast)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="shout-key-input" readonly placeholder="Press a key..."
+                            style="flex: 1; cursor: pointer; text-align: center;">
+                        <button type="button" class="btn btn-secondary" style="width: auto; padding: 8px 12px;"
+                            onclick="startKeyCapture('shout')">Set</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">🎤 Voice Settings</h3>
+
+                <div class="form-group"
+                    style="padding: 12px; background: rgba(124, 58, 237, 0.1); border: 1px solid rgba(124, 58, 237, 0.2); border-radius: 6px; margin-bottom: 20px;">
+                    <label style="display: flex; gap: 10px; cursor: pointer; align-items: flex-start;">
+                        <input type="checkbox" id="ai-noise-cancel-check" checked style="margin-top: 4px;">
+                        <div style="flex: 1;">
+                            <div
+                                style="font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; color: var(--text-primary);">
+                                ⚡ AI Noise Cancellation</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+                                Advanced noise suppression using RNNoise. Filters out keyboard clicks, breathing, and
+                                background hum.
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Noise Gate Sensitivity</label>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 12px; color: var(--text-muted);">Low</span>
+                        <input type="range" id="noise-gate-slider" min="0" max="100" value="30"
+                            style="flex: 1; accent-color: var(--accent);">
+                        <span style="font-size: 12px; color: var(--text-muted);">High</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">Threshold: <span
+                                id="noise-threshold-value">30</span>%</span>
+                        <div id="mic-level-container"
+                            style="width: 100px; height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
+                            <div id="mic-level-bar"
+                                style="width: 0%; height: 100%; background: var(--success); transition: width 0.05s;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-primary" onclick="saveSettings()">Save</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('settings-modal')">Cancel</button>
+            </div>
         </div>
     </div>
 

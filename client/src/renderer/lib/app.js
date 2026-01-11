@@ -5,6 +5,31 @@
 let SERVER_URL = (localStorage.getItem('exortc_server_url') || 'http://localhost:3000').replace(/\/+$/, '');
 const API_BASE = SERVER_URL + '/api';
 
+// User settings (stored in localStorage)
+const defaultSettings = {
+    pttKey: 'KeyV',
+    pttKeyDisplay: 'V',
+    shoutKey: 'KeyB',
+    shoutKeyDisplay: 'B',
+    noiseGateThreshold: 30,
+    aiNoiseCancel: true
+};
+
+let settings = { ...defaultSettings };
+try {
+    const saved = localStorage.getItem('exortc_settings');
+    if (saved) {
+        settings = { ...defaultSettings, ...JSON.parse(saved) };
+    }
+} catch (e) {
+    console.warn('Failed to load settings');
+}
+
+// Audio analysis for noise gate
+let audioAnalyser = null;
+let audioDataArray = null;
+let micLevelInterval = null;
+
 const api = {
     token: null,
 
@@ -95,8 +120,8 @@ const api = {
         return this.request('GET', `/servers/${serverId}/rooms`);
     },
 
-    async createRoom(serverId, name) {
-        return this.request('POST', `/servers/${serverId}/rooms`, { name });
+    async createRoom(serverId, name, voiceMode = 'ptt') {
+        return this.request('POST', `/servers/${serverId}/rooms`, { name, voice_mode: voiceMode });
     },
 
     // Shout permissions
@@ -200,6 +225,7 @@ const audioEngine = {
     localStream: null,
     peers: new Map(),
     isMuted: true,
+    audioContext: null,
 
     rtcConfig: {
         iceServers: [
@@ -210,7 +236,7 @@ const audioEngine = {
 
     async initialize() {
         try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({
+            const rawStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
@@ -218,6 +244,40 @@ const audioEngine = {
                 },
                 video: false
             });
+
+            this.audioContext = new AudioContext();
+            const source = this.audioContext.createMediaStreamSource(rawStream);
+            const destination = this.audioContext.createMediaStreamDestination();
+
+            // AI Noise Cancellation (RNNoise)
+            try {
+                // Determine path relative to the renderer process
+                await this.audioContext.audioWorklet.addModule('./lib/rnnoise/rnnoise-processor.js');
+                this.rnnoiseNode = new AudioWorkletNode(this.audioContext, 'rnnoise-processor');
+                this.rnnoiseNode.port.postMessage({ type: 'toggle', enabled: settings.aiNoiseCancel });
+
+                // Graph: Source -> RNNoise -> Destination
+                source.connect(this.rnnoiseNode);
+                this.rnnoiseNode.connect(destination);
+
+                // Visualization connects from RNNoise output (denoised)
+                audioAnalyser = this.audioContext.createAnalyser();
+                this.rnnoiseNode.connect(audioAnalyser);
+                console.log('RNNoise loaded and connected');
+            } catch (e) {
+                console.error('Failed to load RNNoise, bypassing:', e);
+                // Fallback: Source -> Destination
+                source.connect(destination);
+                audioAnalyser = this.audioContext.createAnalyser();
+                source.connect(audioAnalyser);
+            }
+
+            audioAnalyser.fftSize = 256;
+            audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+
+            this.localStream = destination.stream;
+            this.rawTracks = rawStream.getTracks(); // Keep reference to stop mic later
+
             this.setMuted(true);
             console.log('Audio engine initialized');
             return true;
@@ -225,6 +285,13 @@ const audioEngine = {
             console.error('Failed to get audio stream:', error);
             return false;
         }
+    },
+
+    getMicLevel() {
+        if (!audioAnalyser || !audioDataArray) return 0;
+        audioAnalyser.getByteFrequencyData(audioDataArray);
+        const average = audioDataArray.reduce((a, b) => a + b, 0) / audioDataArray.length;
+        return Math.min(100, Math.round(average / 1.28)); // Normalize to 0-100
     },
 
     setMuted(muted) {
@@ -333,6 +400,14 @@ const audioEngine = {
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => track.stop());
             this.localStream = null;
+        }
+        if (this.rawTracks) {
+            this.rawTracks.forEach(track => track.stop());
+            this.rawTracks = null;
+        }
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
         }
     }
 };
@@ -482,13 +557,19 @@ function setupHotkeyHandlers() {
     }
 
     document.addEventListener('keydown', (e) => {
-        if (e.code === 'KeyV' && !e.repeat) handlePtt(true);
-        if (e.code === 'KeyB' && !e.repeat) handleShout(true);
+        // Handle keybind capture
+        if (capturingKey) {
+            handleKeyCapture(e);
+            return;
+        }
+
+        if (e.code === settings.pttKey && !e.repeat) handlePtt(true);
+        if (e.code === settings.shoutKey && !e.repeat) handleShout(true);
     });
 
     document.addEventListener('keyup', (e) => {
-        if (e.code === 'KeyV') handlePtt(false);
-        if (e.code === 'KeyB') handleShout(false);
+        if (e.code === settings.pttKey) handlePtt(false);
+        if (e.code === settings.shoutKey) handleShout(false);
     });
 
     const pttBtn = document.getElementById('ptt-btn');
@@ -594,10 +675,56 @@ async function joinRoom(room) {
     document.getElementById('current-room-name').textContent = room.name;
     showRoomView();
     updateRoomListUI();
+
+    // Handle open mic rooms with voice activity detection
+    if (room.voice_mode === 'open') {
+        startVoiceActivityDetection();
+    }
+}
+
+// Voice activity detection for open mic rooms
+let vadInterval = null;
+let isVadSpeaking = false;
+
+function startVoiceActivityDetection() {
+    if (vadInterval) return;
+
+    vadInterval = setInterval(() => {
+        if (!currentRoom || currentRoom.voice_mode !== 'open') {
+            stopVoiceActivityDetection();
+            return;
+        }
+
+        const level = audioEngine.getMicLevel();
+        const threshold = settings.noiseGateThreshold;
+        const nowSpeaking = level >= threshold;
+
+        if (nowSpeaking !== isVadSpeaking) {
+            isVadSpeaking = nowSpeaking;
+            audioEngine.setMuted(!nowSpeaking);
+            socketManager.setSpeaking(nowSpeaking);
+
+            // Update UI
+            const myCard = document.querySelector(`[data-user-id="${currentUser.id}"]`);
+            if (myCard) {
+                myCard.classList.toggle('speaking', nowSpeaking);
+            }
+        }
+    }, 50);
+}
+
+function stopVoiceActivityDetection() {
+    if (vadInterval) {
+        clearInterval(vadInterval);
+        vadInterval = null;
+    }
+    isVadSpeaking = false;
+    audioEngine.setMuted(true);
 }
 
 function leaveCurrentRoom() {
     if (currentRoom) {
+        stopVoiceActivityDetection();
         socketManager.leaveRoom();
         currentRoom = null;
         roomMembers = [];
@@ -625,13 +752,17 @@ function updateServerListUI() {
 
 function updateRoomListUI() {
     const roomList = document.getElementById('room-list');
-    roomList.innerHTML = rooms.map(r => `
-        <div class="room-item ${currentRoom?.id === r.id ? 'active' : ''}" data-room-id="${r.id}">
-            <div class="room-item-icon">🔊</div>
-            <span>${r.name}</span>
-            <span class="room-item-count">${r.member_count || 0}</span>
-        </div>
-    `).join('');
+    roomList.innerHTML = rooms.map(r => {
+        const icon = r.voice_mode === 'open' ? '🎤' : '🔊';
+        const modeLabel = r.voice_mode === 'open' ? 'Open Mic' : 'PTT';
+        return `
+            <div class="room-item ${currentRoom?.id === r.id ? 'active' : ''}" data-room-id="${r.id}" title="${modeLabel}">
+                <div class="room-item-icon">${icon}</div>
+                <span>${r.name}</span>
+                <span class="room-item-count">${r.member_count || 0}</span>
+            </div>
+        `;
+    }).join('');
 
     roomList.querySelectorAll('.room-item').forEach(el => {
         el.addEventListener('click', () => {
@@ -690,6 +821,94 @@ function openModal(id) {
 
 function closeModal(id) {
     document.getElementById(id).classList.remove('show');
+    // Stop mic level monitoring when closing settings
+    if (id === 'settings-modal' && micLevelInterval) {
+        clearInterval(micLevelInterval);
+        micLevelInterval = null;
+    }
+}
+
+// Settings management
+let capturingKey = null;
+
+function openSettings() {
+    // Load current settings into inputs
+    document.getElementById('ptt-key-input').value = settings.pttKeyDisplay;
+    document.getElementById('shout-key-input').value = settings.shoutKeyDisplay;
+    document.getElementById('noise-gate-slider').value = settings.noiseGateThreshold;
+    document.getElementById('noise-threshold-value').textContent = settings.noiseGateThreshold;
+    document.getElementById('ai-noise-cancel-check').checked = settings.aiNoiseCancel;
+
+    openModal('settings-modal');
+
+    // Start mic level monitoring
+    micLevelInterval = setInterval(() => {
+        const level = audioEngine.getMicLevel();
+        const levelBar = document.getElementById('mic-level-bar');
+        if (levelBar) {
+            levelBar.style.width = level + '%';
+            // Color based on whether it exceeds threshold
+            const threshold = parseInt(document.getElementById('noise-gate-slider').value);
+            levelBar.style.background = level >= threshold ? 'var(--success)' : 'var(--danger)';
+        }
+    }, 50);
+}
+
+function startKeyCapture(type) {
+    capturingKey = type;
+    const inputId = type === 'ptt' ? 'ptt-key-input' : 'shout-key-input';
+    document.getElementById(inputId).value = 'Press a key...';
+    document.getElementById(inputId).style.borderColor = 'var(--accent)';
+}
+
+function handleKeyCapture(e) {
+    if (!capturingKey) return;
+
+    e.preventDefault();
+    const keyDisplay = e.key.length === 1 ? e.key.toUpperCase() : e.code.replace('Key', '');
+    const inputId = capturingKey === 'ptt' ? 'ptt-key-input' : 'shout-key-input';
+
+    document.getElementById(inputId).value = keyDisplay;
+    document.getElementById(inputId).style.borderColor = '';
+
+    // Temporarily store until save
+    if (capturingKey === 'ptt') {
+        settings.pttKey = e.code;
+        settings.pttKeyDisplay = keyDisplay;
+    } else {
+        settings.shoutKey = e.code;
+        settings.shoutKeyDisplay = keyDisplay;
+    }
+
+    capturingKey = null;
+}
+
+function saveSettings() {
+    settings.noiseGateThreshold = parseInt(document.getElementById('noise-gate-slider').value);
+    settings.aiNoiseCancel = document.getElementById('ai-noise-cancel-check').checked;
+
+    localStorage.setItem('exortc_settings', JSON.stringify(settings));
+
+    // Update audio engine
+    if (audioEngine.rnnoiseNode) {
+        audioEngine.rnnoiseNode.port.postMessage({ type: 'toggle', enabled: settings.aiNoiseCancel });
+    }
+
+    closeModal('settings-modal');
+
+    // Update button displays
+    updateKeybindDisplay();
+}
+
+function updateKeybindDisplay() {
+    const pttBtn = document.getElementById('ptt-btn');
+    const shoutBtn = document.getElementById('shout-btn');
+    if (pttBtn) {
+        pttBtn.querySelector('kbd').textContent = settings.pttKeyDisplay;
+    }
+    if (shoutBtn) {
+        shoutBtn.querySelector('kbd').textContent = settings.shoutKeyDisplay;
+    }
 }
 
 // Keep track of server details for member management
@@ -813,6 +1032,7 @@ document.getElementById('manage-members-btn').addEventListener('click', () => {
         showMembers();
     }
 });
+document.getElementById('settings-btn').addEventListener('click', openSettings);
 
 document.getElementById('create-server-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -851,10 +1071,13 @@ document.getElementById('create-room-form').addEventListener('submit', async (e)
     e.preventDefault();
     if (!currentServer) return;
     const name = document.getElementById('room-name').value;
-    const result = await api.createRoom(currentServer.id, name);
+    const isOpenMic = document.getElementById('room-open-mic').checked;
+    const voiceMode = isOpenMic ? 'open' : 'ptt';
+    const result = await api.createRoom(currentServer.id, name, voiceMode);
     if (result.data) {
         closeModal('create-room-modal');
         document.getElementById('room-name').value = '';
+        document.getElementById('room-open-mic').checked = false;
         await loadRooms(currentServer.id);
     } else if (result.error) {
         showError(result.error);
@@ -876,10 +1099,18 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 document.querySelectorAll('.modal-overlay').forEach(modal => {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
-            modal.classList.remove('show');
+            closeModal(modal.id);
         }
     });
 });
+
+// Noise gate slider handler
+document.getElementById('noise-gate-slider').addEventListener('input', (e) => {
+    document.getElementById('noise-threshold-value').textContent = e.target.value;
+});
+
+// Initialize keybind display
+updateKeybindDisplay();
 
 // Start app
 init();

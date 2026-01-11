@@ -5,6 +5,7 @@ export interface Room {
     id: string;
     server_id: string;
     name: string;
+    voice_mode: 'ptt' | 'open';
     created_at: string;
 }
 
@@ -15,15 +16,16 @@ export interface RoomMember {
     joined_at: string;
 }
 
-export function createRoom(serverId: string, name: string): Room {
+export function createRoom(serverId: string, name: string, voiceMode: 'ptt' | 'open' = 'ptt'): Room {
     const id = uuidv4();
 
-    db.run('INSERT INTO rooms (id, server_id, name) VALUES (?, ?, ?)', [id, serverId, name]);
+    db.run('INSERT INTO rooms (id, server_id, name, voice_mode) VALUES (?, ?, ?, ?)', [id, serverId, name, voiceMode]);
 
     return {
         id,
         server_id: serverId,
         name,
+        voice_mode: voiceMode,
         created_at: new Date().toISOString()
     };
 }

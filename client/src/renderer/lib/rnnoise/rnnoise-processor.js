@@ -33,7 +33,7 @@ class RnnoiseProcessor extends AudioWorkletProcessor {
     async init() {
         try {
             const library = await Rnnoise.load();
-            this.rnnoise = library.create();
+            this.rnnoise = library.createDenoiseState();
             this.initialized = true;
         } catch (e) {
             console.error('Failed to initialize RNNoise:', e);
@@ -75,7 +75,8 @@ class RnnoiseProcessor extends AudioWorkletProcessor {
             this.inputsBuffer.splice(0, this.FRAME_SIZE);
 
             // Run AI Denoise
-            const processedFrame = this.rnnoise.process(frame);
+            this.rnnoise.processFrame(frame);
+            const processedFrame = frame;
 
             // Post-Processing Expander (Noise Suppression)
             // Calculate RMS of the denoised frame

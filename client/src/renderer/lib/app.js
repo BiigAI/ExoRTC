@@ -1060,6 +1060,9 @@ function setupSocketHandlers() {
         // Immediately leave the room to stop audio and update UI
         leaveCurrentRoom();
 
+        // Refresh server list to show "Kicked" status immediately
+        loadServers();
+
         // Show notification after a brief delay to ensure UI has updated
         setTimeout(() => {
             alert(`You have been kicked from the server.\nReason: ${data.reason || 'None'}\nDuration: ${data.duration} minutes`);
@@ -1344,12 +1347,29 @@ function updateServerListUI() {
     `}).join('');
 
     serverList.querySelectorAll('.server-item').forEach(el => {
-        el.addEventListener('click', () => {
+        el.addEventListener('click', async () => {
+            const serverId = el.dataset.serverId;
+            const server = servers.find(s => s.id === serverId);
+
             if (el.dataset.kicked === 'true') {
-                // Optional: Show a toast or shake animation
+                // Check if it has expired since we last loaded
+                if (server && server.kick_expires_at) {
+                    const expires = new Date(server.kick_expires_at);
+                    if (expires < new Date()) {
+                        // It expired! Refresh everything.
+                        await loadServers();
+                        const refreshedServer = servers.find(s => s.id === serverId);
+                        if (refreshedServer) selectServer(refreshedServer);
+                        return;
+                    }
+                }
+
+                // Still kicked
+                const expires = new Date(server.kick_expires_at);
+                const remainingMinutes = Math.ceil((expires - new Date()) / 60000);
+                showError(`You are kicked from this server.\nTime remaining: ${remainingMinutes} minutes.`);
                 return;
             }
-            const server = servers.find(s => s.id === el.dataset.serverId);
             if (server) selectServer(server);
         });
     });

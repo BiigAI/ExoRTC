@@ -51,7 +51,8 @@ export function kickUser(serverId: string, userId: string, kickedBy: string, dur
 
 export function isUserKicked(serverId: string, userId: string): boolean {
     try {
-        const row = db.get<{ expires_at: string }>('SELECT expires_at FROM server_kicks WHERE server_id = ? AND user_id = ? AND expires_at > datetime("now") ORDER BY expires_at DESC LIMIT 1', [serverId, userId]);
+        const now = new Date().toISOString();
+        const row = db.get<{ expires_at: string }>('SELECT expires_at FROM server_kicks WHERE server_id = ? AND user_id = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1', [serverId, userId, now]);
         return !!row;
     } catch {
         return false;
@@ -59,5 +60,6 @@ export function isUserKicked(serverId: string, userId: string): boolean {
 }
 
 export function getActiveKick(serverId: string, userId: string): Kick | null {
-    return db.get<Kick>('SELECT * FROM server_kicks WHERE server_id = ? AND user_id = ? AND expires_at > datetime("now") ORDER BY expires_at DESC LIMIT 1', [serverId, userId]) || null;
+    const now = new Date().toISOString();
+    return db.get<Kick>('SELECT * FROM server_kicks WHERE server_id = ? AND user_id = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1', [serverId, userId, now]) || null;
 }

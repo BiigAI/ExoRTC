@@ -1057,6 +1057,14 @@ function setupSocketHandlers() {
     });
 
     socketManager.on('you-are-kicked', (data) => {
+        // Check if we are currently kicked from the active server
+        if (currentServer && currentServer.id === data.serverId) {
+            currentServer = null;
+            document.getElementById('room-list').innerHTML = ''; // Strictly clear channels
+            document.querySelector('.sidebar-header h2').textContent = 'Select Server';
+            showNoRoomView();
+        }
+
         // Immediately leave the room to stop audio and update UI
         leaveCurrentRoom();
 

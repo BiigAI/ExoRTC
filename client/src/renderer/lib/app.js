@@ -400,16 +400,17 @@ const audioEngine = {
         }
     },
 
-    async createPeerConnection(userId, username, initiator) {
+    async createPeerConnection(userId, username, initiator, connectionType = 'room') {
         this.closePeerConnection(userId);
 
         const connection = new RTCPeerConnection(this.rtcConfig);
-        const peer = { userId, username, connection };
+        const peer = { userId, username, connection, type: connectionType };
         this.peers.set(userId, peer);
 
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => {
-                connection.addTrack(track, this.localStream);
+                const sender = connection.addTrack(track, this.localStream);
+                peer.sender = sender; // Store sender for later muting
             });
         }
 
@@ -439,6 +440,20 @@ const audioEngine = {
         }
 
         return connection;
+    },
+
+    // Mute/unmute outgoing audio to room connections (used during shout)
+    setRoomAudioMuted(muted) {
+        this.peers.forEach(peer => {
+            if (peer.type === 'room' && peer.connection) {
+                const senders = peer.connection.getSenders();
+                senders.forEach(sender => {
+                    if (sender.track && sender.track.kind === 'audio') {
+                        sender.track.enabled = !muted;
+                    }
+                });
+            }
+        });
     },
 
     async handleOffer(fromUserId, fromUsername, offer) {
@@ -691,7 +706,7 @@ function setupSocketHandlers() {
         }
         activeShoutCount++;
 
-        await audioEngine.createPeerConnection(data.fromUserId, data.fromUsername, false);
+        await audioEngine.createPeerConnection(data.fromUserId, data.fromUsername, false, 'shout');
     });
 
     socketManager.on('shout-ended', (data) => {
@@ -718,7 +733,7 @@ function setupSocketHandlers() {
         activeShoutCount++;
 
         for (const target of data.targets) {
-            await audioEngine.createPeerConnection(target.userId, target.username, true);
+            await audioEngine.createPeerConnection(target.userId, target.username, true, 'shout');
         }
     });
 
@@ -807,12 +822,16 @@ function handleShout(pressed) {
     if (pressed) {
         shoutBtn.classList.add('active');
         if (myCard) myCard.classList.add('shouting');
+        // Mute audio to room peers so they don't hear the shout
+        audioEngine.setRoomAudioMuted(true);
         audioEngine.setMuted(false);
         socketManager.startShout(currentServer.id);
     } else {
         shoutBtn.classList.remove('active');
         if (myCard) myCard.classList.remove('shouting');
         audioEngine.setMuted(true);
+        // Unmute audio to room peers
+        audioEngine.setRoomAudioMuted(false);
         socketManager.endShout(currentServer.id);
 
         // Play end shout sound

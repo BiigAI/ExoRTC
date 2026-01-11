@@ -16,9 +16,15 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// POST /api/servers - Create a new server
+// POST /api/servers - Create a new server (admin only)
 router.post('/', (req: AuthenticatedRequest, res: Response) => {
     const { name } = req.body;
+
+    // Only app admins can create servers
+    if (!req.user?.is_app_admin) {
+        res.status(403).json({ error: 'Only app administrators can create servers' });
+        return;
+    }
 
     if (!name || name.trim().length === 0) {
         res.status(400).json({ error: 'Server name is required' });

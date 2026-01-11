@@ -1089,6 +1089,14 @@ function updateUserDisplay() {
         userAvatarElement.textContent = currentUser.username[0].toUpperCase();
         userAvatarElement.style.background = currentUser.profile_color || 'var(--accent)';
     }
+
+    // Show/hide create server button based on admin status
+    const createServerBtn = document.getElementById('create-server-btn');
+    console.log('DEBUG: currentUser =', currentUser);
+    console.log('DEBUG: is_app_admin =', currentUser?.is_app_admin);
+    if (createServerBtn) {
+        createServerBtn.style.display = currentUser?.is_app_admin ? '' : 'none';
+    }
 }
 
 function updateKeybindDisplay() {

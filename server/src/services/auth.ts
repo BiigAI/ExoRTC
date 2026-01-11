@@ -13,12 +13,14 @@ export interface User {
     email: string;
     password_hash?: string;
     profile_color?: string;
+    is_app_admin?: boolean;
     created_at: string;
 }
 
 export interface TokenPayload {
     userId: string;
     username: string;
+    isAppAdmin: boolean;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -32,7 +34,8 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 export function generateToken(user: User): string {
     const payload: TokenPayload = {
         userId: user.id,
-        username: user.username
+        username: user.username,
+        isAppAdmin: !!user.is_app_admin
     };
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
@@ -82,6 +85,7 @@ export async function loginUser(usernameOrEmail: string, password: string): Prom
         username: row.username,
         email: row.email,
         profile_color: row.profile_color || '#CC2244',
+        is_app_admin: !!row.is_app_admin,
         created_at: row.created_at
     };
     const token = generateToken(user);
@@ -89,8 +93,9 @@ export async function loginUser(usernameOrEmail: string, password: string): Prom
 }
 
 export function getUserById(id: string): User | null {
-    const row = db.get<User>('SELECT id, username, email, profile_color, created_at FROM users WHERE id = ?', [id]);
-    return row || null;
+    const row = db.get<User>('SELECT id, username, email, profile_color, is_app_admin, created_at FROM users WHERE id = ?', [id]);
+    if (!row) return null;
+    return { ...row, is_app_admin: !!row.is_app_admin };
 }
 
 export async function updateProfileColor(userId: string, color: string): Promise<User | { error: string }> {

@@ -77,24 +77,23 @@ We use the provided `ecosystem.config.js` which is configured to run the app on 
 You mentioned you want to use the **same domain**. Since port 3000 is taken, you have two main options:
 
 ### Option A: Use a Subdomain (Recommended)
-Example: `rtc.yourdomain.com`
+Example: `rtc.exoduspmc.org`
 
 1.  Create a new NGINX config:
     ```bash
     sudo nano /etc/nginx/sites-available/exortc
     ```
 
-2.  Paste the following (replace `rtc.yourdomain.com` with your actual subdomain):
+2.  Paste the following:
     ```nginx
     server {
-        listen 80;
-        server_name rtc.yourdomain.com;
+        server_name rtc.exoduspmc.org;
 
         location / {
             proxy_pass http://localhost:3001;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
+            proxy_set_header Connection "upgrade";
             proxy_set_header Host $host;
             proxy_cache_bypass $http_upgrade;
         }
@@ -106,6 +105,11 @@ Example: `rtc.yourdomain.com`
     sudo ln -s /etc/nginx/sites-available/exortc /etc/nginx/sites-enabled/
     sudo nginx -t
     sudo systemctl restart nginx
+    ```
+
+4.  **Get SSL Certificate**:
+    ```bash
+    sudo certbot --nginx -d rtc.exoduspmc.org
     ```
 
 ### Option B: Use a Sub-path (Complex)

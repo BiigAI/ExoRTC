@@ -4,7 +4,7 @@
   "description": "ExoRTC P2P Voice Platform - Signaling Server",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/models && cp src/models/schema.sql dist/models/schema.sql",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn src/index.ts",
     "test": "jest"

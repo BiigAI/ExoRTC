@@ -1182,6 +1182,26 @@ async function loadServers() {
     const result = await api.getServers();
     if (result.data) {
         servers = result.data.servers;
+
+        // Check if we are currently viewing a server we've been kicked from
+        if (currentServer) {
+            const serverData = servers.find(s => s.id === currentServer.id);
+            if (serverData && serverData.kick_expires_at) {
+                const expires = new Date(serverData.kick_expires_at);
+                if (expires > new Date()) {
+                    // We are currently in a kicked server, boot us out
+                    leaveCurrentRoom(); // Leave voice channel
+                    currentServer = null;
+                    document.getElementById('room-list').innerHTML = ''; // Clear channels
+                    document.querySelector('.sidebar-header h2').textContent = 'Select Server'; // Reset header
+
+                    // Show global error explainer
+                    const remainingMinutes = Math.ceil((expires - new Date()) / 60000);
+                    showError(`You have been kicked from this server. Access restored in ${remainingMinutes} minutes.`);
+                }
+            }
+        }
+
         updateServerListUI();
     }
 }
